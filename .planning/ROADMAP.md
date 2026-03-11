@@ -45,12 +45,11 @@ Plans:
   3. User sees a 6-month spending trend bar chart and can hover any bar to see the exact amount
   4. User sees a category donut chart for current month spending and can click any category to see its transactions
   5. All charts render correctly with muted harmonious palette and 10+ distinct category colors on both desktop and mobile
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 02-01: TBD
-- [ ] 02-02: TBD
-- [ ] 02-03: TBD
+- [ ] 02-01-PLAN.md -- Dashboard cards: install Recharts, add query functions, summary cards, net position, account cards with credit utilization
+- [ ] 02-02-PLAN.md -- Charts and page wiring: spending trend bar chart, category donut with drill-down, wire all components into page.tsx
 
 ### Phase 3: Interactive Panels
 **Goal**: Users can explore their full transaction history with search and filters, and see automatically detected recurring charges
@@ -90,6 +89,6 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Foundation and Layout | 3/3 | Complete   | 2026-03-11 |
-| 2. Dashboard Visuals | 0/3 | Not started | - |
+| 2. Dashboard Visuals | 0/2 | Not started | - |
 | 3. Interactive Panels | 0/2 | Not started | - |
 | 4. Chat System | 0/2 | Not started | - |
