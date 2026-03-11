@@ -24,10 +24,10 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Charts
 
-- [ ] **CHRT-01**: Monthly spending trend bar chart showing trailing 6 months with hover for exact amounts
-- [ ] **CHRT-02**: Spending by category donut chart for current month with legend
-- [ ] **CHRT-03**: Category drill-down — clicking a category shows its transactions
-- [ ] **CHRT-04**: Charts use muted harmonious palette with 10+ distinct category colors
+- [x] **CHRT-01**: Monthly spending trend bar chart showing trailing 6 months with hover for exact amounts
+- [x] **CHRT-02**: Spending by category donut chart for current month with legend
+- [x] **CHRT-03**: Category drill-down — clicking a category shows its transactions
+- [x] **CHRT-04**: Charts use muted harmonious palette with 10+ distinct category colors
 
 ### Transactions
 
@@ -106,10 +106,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 | DASH-02 | Phase 2 | Complete |
 | DASH-03 | Phase 2 | Complete |
 | DASH-04 | Phase 2 | Complete |
-| CHRT-01 | Phase 2 | Pending |
-| CHRT-02 | Phase 2 | Pending |
-| CHRT-03 | Phase 2 | Pending |
-| CHRT-04 | Phase 2 | Pending |
+| CHRT-01 | Phase 2 | Complete |
+| CHRT-02 | Phase 2 | Complete |
+| CHRT-03 | Phase 2 | Complete |
+| CHRT-04 | Phase 2 | Complete |
 | TXNS-01 | Phase 3 | Pending |
 | TXNS-02 | Phase 3 | Pending |
 | TXNS-03 | Phase 3 | Pending |
