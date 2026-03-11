@@ -1,0 +1,132 @@
+import type { Transaction } from "@/lib/queries/types"
+
+export interface TransactionFilters {
+  dateRange?: { start: string; end: string }
+  category?: string
+  amountMin?: number
+  amountMax?: number
+  accountId?: string
+}
+
+export type SortOption =
+  | "date-desc"
+  | "date-asc"
+  | "amount-desc"
+  | "amount-asc"
+  | "merchant-asc"
+
+const PAYMENT_CATEGORIES = ["TRANSFER_OUT", "LOAN_PAYMENTS", "TRANSFER_IN"]
+
+function isZelle(t: Transaction): boolean {
+  const name = (t.merchant_name || t.name || "").toLowerCase()
+  return name.includes("zelle")
+}
+
+/**
+ * Base visibility filter:
+ * - Remove deposits/income (negative amounts)
+ * - Remove payment categories (TRANSFER_OUT, LOAN_PAYMENTS, TRANSFER_IN)
+ *   EXCEPT Zelle transfers
+ */
+export function applyBaseFilter(transactions: Transaction[]): Transaction[] {
+  return transactions.filter((t) => {
+    // Hide deposits/income (negative amount = money entering account)
+    if (t.amount < 0) return false
+
+    // Check for payment-like categories to potentially hide
+    if (PAYMENT_CATEGORIES.includes(t.category_primary ?? "")) {
+      return isZelle(t)
+    }
+
+    return true
+  })
+}
+
+/**
+ * Search by merchant_name or name fields, case-insensitive.
+ * Returns all transactions if term is empty or whitespace.
+ */
+export function searchTransactions(
+  transactions: Transaction[],
+  term: string
+): Transaction[] {
+  const trimmed = term.trim()
+  if (!trimmed) return transactions
+
+  const lower = trimmed.toLowerCase()
+  return transactions.filter((t) => {
+    const merchant = (t.merchant_name || "").toLowerCase()
+    const name = (t.name || "").toLowerCase()
+    return merchant.includes(lower) || name.includes(lower)
+  })
+}
+
+/**
+ * Compound filter: applies all non-undefined filters in combination.
+ * Date comparison uses string comparison (ISO format).
+ * Amount range checks absolute values.
+ */
+export function filterTransactions(
+  transactions: Transaction[],
+  filters: TransactionFilters
+): Transaction[] {
+  return transactions.filter((t) => {
+    if (filters.dateRange) {
+      if (t.date < filters.dateRange.start || t.date > filters.dateRange.end) {
+        return false
+      }
+    }
+
+    if (filters.category !== undefined) {
+      if (t.category_primary !== filters.category) return false
+    }
+
+    if (filters.amountMin !== undefined) {
+      if (Math.abs(t.amount) < filters.amountMin) return false
+    }
+
+    if (filters.amountMax !== undefined) {
+      if (Math.abs(t.amount) > filters.amountMax) return false
+    }
+
+    if (filters.accountId !== undefined) {
+      if (t.account_id !== filters.accountId) return false
+    }
+
+    return true
+  })
+}
+
+/**
+ * Sort transactions by the given option. Returns a new array (does not mutate).
+ * Merchant sort uses merchant_name ?? name ?? "" for comparison.
+ */
+export function sortTransactions(
+  transactions: Transaction[],
+  sort: SortOption
+): Transaction[] {
+  const sorted = [...transactions]
+
+  switch (sort) {
+    case "date-desc":
+      sorted.sort((a, b) => b.date.localeCompare(a.date))
+      break
+    case "date-asc":
+      sorted.sort((a, b) => a.date.localeCompare(b.date))
+      break
+    case "amount-desc":
+      sorted.sort((a, b) => Math.abs(b.amount) - Math.abs(a.amount))
+      break
+    case "amount-asc":
+      sorted.sort((a, b) => Math.abs(a.amount) - Math.abs(b.amount))
+      break
+    case "merchant-asc": {
+      const getName = (t: Transaction) =>
+        (t.merchant_name ?? t.name ?? "").toLowerCase()
+      sorted.sort((a, b) => getName(a).localeCompare(getName(b)))
+      break
+    }
+  }
+
+  return sorted
+}
