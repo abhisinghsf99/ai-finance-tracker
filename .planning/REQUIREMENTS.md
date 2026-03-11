@@ -9,11 +9,11 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Foundation
 
-- [ ] **FOUND-01**: User sees a Next.js 15 app with TypeScript, Tailwind CSS, and shadcn/ui components
+- [x] **FOUND-01**: User sees a Next.js 15 app with TypeScript, Tailwind CSS, and shadcn/ui components
 - [ ] **FOUND-02**: User must enter a password to access the app (middleware-based gate, session cookie)
-- [ ] **FOUND-03**: All data fetched server-side via Supabase service_role key (never exposed to browser)
+- [x] **FOUND-03**: All data fetched server-side via Supabase service_role key (never exposed to browser)
 - [ ] **FOUND-04**: User navigates between pages via sidebar navigation that collapses on mobile
-- [ ] **FOUND-05**: User can toggle between dark (default) and light theme, preference persisted to localStorage
+- [x] **FOUND-05**: User can toggle between dark (default) and light theme, preference persisted to localStorage
 
 ### Dashboard
 
@@ -91,11 +91,11 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| FOUND-01 | Phase 1 | Pending |
+| FOUND-01 | Phase 1 | Complete |
 | FOUND-02 | Phase 1 | Pending |
-| FOUND-03 | Phase 1 | Pending |
+| FOUND-03 | Phase 1 | Complete |
 | FOUND-04 | Phase 1 | Pending |
-| FOUND-05 | Phase 1 | Pending |
+| FOUND-05 | Phase 1 | Complete |
 | DASH-01 | Phase 2 | Pending |
 | DASH-02 | Phase 2 | Pending |
 | DASH-03 | Phase 2 | Pending |
