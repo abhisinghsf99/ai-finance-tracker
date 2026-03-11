@@ -87,3 +87,46 @@ describe("auth API route", () => {
     expect(setCookie).toContain("Max-Age=2592000")
   })
 })
+
+describe("auth API sign-out (DELETE)", () => {
+  async function importDELETE() {
+    const mod = await import("../app/api/auth/route")
+    return mod.DELETE
+  }
+
+  it("returns 200 with success: true", async () => {
+    const DELETE = await importDELETE()
+    const response = await DELETE()
+
+    expect(response.status).toBe(200)
+
+    const body = await response.json()
+    expect(body.success).toBe(true)
+  })
+
+  it("clears fintrack-session cookie with maxAge=0", async () => {
+    const DELETE = await importDELETE()
+    const response = await DELETE()
+
+    const setCookie = response.headers.get("set-cookie")
+    expect(setCookie).toBeTruthy()
+    expect(setCookie).toContain("fintrack-session")
+    expect(setCookie).toContain("Max-Age=0")
+  })
+
+  it("sets cookie with httpOnly flag", async () => {
+    const DELETE = await importDELETE()
+    const response = await DELETE()
+
+    const setCookie = response.headers.get("set-cookie")
+    expect(setCookie).toContain("HttpOnly")
+  })
+
+  it("sets cookie with path=/", async () => {
+    const DELETE = await importDELETE()
+    const response = await DELETE()
+
+    const setCookie = response.headers.get("set-cookie")
+    expect(setCookie).toContain("Path=/")
+  })
+})
