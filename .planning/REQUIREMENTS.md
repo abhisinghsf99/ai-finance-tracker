@@ -1,7 +1,7 @@
-# Requirements: FinTrack Frontend Dashboard
+# Requirements: FinTrack
 
-**Defined:** 2025-03-10
-**Core Value:** At-a-glance financial visibility — see balances, spending trends, and category breakdowns without asking Claude a question every time.
+**Defined:** 2026-03-10
+**Core Value:** At-a-glance visibility into personal finances with a chat interface for ad-hoc financial questions
 
 ## v1 Requirements
 
@@ -9,81 +9,83 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Foundation
 
-- [x] **FOUND-01**: User sees a Next.js 15 app with TypeScript, Tailwind CSS, and shadcn/ui components
-- [x] **FOUND-02**: User must enter a password to access the app (middleware-based gate, session cookie)
-- [x] **FOUND-03**: All data fetched server-side via Supabase service_role key (never exposed to browser)
-- [ ] **FOUND-04**: User navigates between pages via sidebar navigation that collapses on mobile
-- [x] **FOUND-05**: User can toggle between dark (default) and light theme, preference persisted to localStorage
+- [ ] **FOUND-01**: Project initializes with Next.js App Router, TypeScript, Tailwind CSS, shadcn/ui
+- [ ] **FOUND-02**: Password-protected login with 30-day session cookie and sign out
+- [ ] **FOUND-03**: All Supabase reads go through server-side service_role key (no anon key in browser)
+- [ ] **FOUND-04**: Typed query layer in lib/queries/ with Plaid amount convention utilities
+- [ ] **FOUND-05**: Dark theme only with teal/cyan accent, Copilot-style aesthetic, neo-grotesque font
 
-### Dashboard
+### Dashboard Overview
 
-- [ ] **DASH-01**: User can see individual account cards with current balance, type, and institution
-- [ ] **DASH-02**: User can see net position card showing total cash minus total credit minus total loans
-- [ ] **DASH-03**: User can see credit utilization bars (balance vs. limit) for each credit card
-- [ ] **DASH-04**: User can see a circle chart showing spending by category for the last 2 weeks
-- [ ] **DASH-05**: User can see and expand a recent transactions list limited to last 30 days
-- [ ] **DASH-06**: User sees automated flags on suspicious transactions based on spending history (unusually large amounts, new merchants above threshold, duplicate charges)
+- [ ] **DASH-01**: Summary cards showing current month spending, last month with % change, and transaction count
+- [ ] **DASH-02**: Individual account cards with name, last 4 digits, balance, and account type
+- [ ] **DASH-03**: Net position card showing total cash minus total credit minus total loans
+- [ ] **DASH-04**: Credit utilization bars for each credit card with color coding (green/amber/red)
+
+### Charts
+
+- [ ] **CHRT-01**: Monthly spending trend bar chart showing trailing 6 months with hover for exact amounts
+- [ ] **CHRT-02**: Spending by category donut chart for current month with legend
+- [ ] **CHRT-03**: Category drill-down — clicking a category shows its transactions
+- [ ] **CHRT-04**: Charts use muted harmonious palette with 10+ distinct category colors
 
 ### Transactions
 
-- [ ] **TXNS-01**: User can browse all transactions with search by merchant name or raw description
-- [ ] **TXNS-02**: User can filter transactions by date range, category, account, and amount range
+- [ ] **TXNS-01**: Recent transactions in collapsible panel, default collapsed showing count
+- [ ] **TXNS-02**: Expanded transactions show merchant name, amount, category, date, account (last 4)
+- [ ] **TXNS-03**: Search transactions by merchant name or description
+- [ ] **TXNS-04**: Filter transactions by date range, category, amount range, and account
+- [ ] **TXNS-05**: Sort transactions by date, amount, or merchant
 
 ### Recurring
 
-- [ ] **RECR-01**: User can see auto-detected recurring charges with merchant name, amount, frequency (weekly/monthly/quarterly), and last charge date
-- [ ] **RECR-02**: User can see estimated monthly recurring total at top of page
+- [ ] **RECR-01**: Recurring charges in collapsible panel, default collapsed showing monthly total
+- [ ] **RECR-02**: Each recurring entry shows merchant name, amount, frequency, last charge date, charge count
+- [ ] **RECR-03**: Detection logic groups by merchant_name + rounded amount with COUNT >= 3 and frequency inference
 
 ### Chat
 
-- [ ] **CHAT-01**: User can ask natural language financial questions that are answered via Claude + remote MCP server
-- [ ] **CHAT-02**: User sees chat interface with message bubbles, loading indicator, and conversational responses
-- [ ] **CHAT-03**: User sees smart suggestion chips based on recent queries from query_log table
+- [ ] **CHAT-01**: Floating chat button (bottom-right) opens a chat drawer/modal
+- [ ] **CHAT-02**: Chat message area with user/assistant bubbles and loading indicator
+- [ ] **CHAT-03**: Suggestion chips for common queries on empty state
+- [ ] **CHAT-04**: /api/chat route calls Anthropic API with MCP server for SQL queries
+- [ ] **CHAT-05**: Claude generates SQL via execute_query tool and returns conversational response
 
-### Deployment
+### Layout & Mobile
 
-- [ ] **DEPL-01**: App is deployed to Vercel with all environment variables configured
-- [ ] **DEPL-02**: App works correctly on both mobile and desktop browsers
+- [ ] **LAYO-01**: Single scrollable page with top nav bar (logo left, sign out right)
+- [ ] **LAYO-02**: Desktop: single column with max-width container
+- [ ] **LAYO-03**: Mobile: compact top nav, bottom tab bar for section jumps (Summary, Accounts, Transactions, Chat)
+- [ ] **LAYO-04**: Deployed to Vercel with environment variables configured
 
 ## v2 Requirements
 
 Deferred to future release. Tracked but not in current roadmap.
 
-### Notifications
+### Alerts & Notifications
 
-- **NOTF-01**: User receives push notifications for transaction alerts (PWA + service worker)
-- **NOTF-02**: User can configure notification thresholds and preferences
-
-### Anomaly Detection
-
-- **ANOM-01**: Rules engine detects amount spikes, new merchants, duplicate charges, category spending spikes
-- **ANOM-02**: Alerts stored in Supabase table and surfaced in dashboard + push notification
+- **ALRT-01**: PWA with push notifications for transaction alerts
+- **ALRT-02**: Anomaly detection: unusually large charges, new merchants above threshold, duplicate charges
+- **ALRT-03**: Alert rules engine with configurable thresholds
 
 ### Category Management
 
-- **CATM-01**: User can recategorize individual transactions
-- **CATM-02**: User can create custom categories beyond Plaid taxonomy
-- **CATM-03**: User can bulk recategorize all transactions from a specific merchant
-
-### Analytics
-
-- **ANLT-01**: Monthly spending trend chart (trailing 6 months)
-- **ANLT-02**: Income vs. spending visualization (cash flow)
-- **ANLT-03**: Per-account spending breakdown
+- **CATM-01**: Recategorize individual transactions
+- **CATM-02**: Create custom categories beyond Plaid taxonomy
+- **CATM-03**: Bulk recategorize all transactions from a specific merchant
+- **CATM-04**: Auto-cleanup empty categories from UI
 
 ## Out of Scope
 
 | Feature | Reason |
 |---------|--------|
-| Multi-user support | Personal app, single user |
-| Plaid Link in frontend | Bank connections managed via existing link-account flow |
-| Investment/retirement tracking | Different data model, different Plaid products |
-| Multi-currency | Single user in US, all accounts USD |
-| Transaction editing/writes | Frontend is read-only by design in v1 |
-| Budget setting/goal tracking | Phase 3 potential, requires write path |
+| Multi-user support | Personal/household use only |
+| Light theme / theme toggle | Dark only, reduces scope |
+| Multi-page routing | Single scrollable page design |
+| Plaid Link flow in frontend | Bank connections managed separately via VPS |
+| Investment/retirement accounts | Consumer credit, lending, checking/savings only |
+| Budget setting / goal tracking | Potential Phase 3, not core dashboard |
 | Native mobile app | PWA covers mobile access |
-| Real-time streaming updates | Page-load queries sufficient for personal use |
-| Data export (CSV/PDF) | Chat can answer analytical questions; Supabase available for raw data |
 
 ## Traceability
 
@@ -91,32 +93,42 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| FOUND-01 | Phase 1 | Complete |
-| FOUND-02 | Phase 1 | Complete |
-| FOUND-03 | Phase 1 | Complete |
-| FOUND-04 | Phase 1 | Pending |
-| FOUND-05 | Phase 1 | Complete |
-| DASH-01 | Phase 2 | Pending |
-| DASH-02 | Phase 2 | Pending |
-| DASH-03 | Phase 2 | Pending |
-| DASH-04 | Phase 2 | Pending |
-| DASH-05 | Phase 2 | Pending |
-| DASH-06 | Phase 2 | Pending |
-| TXNS-01 | Phase 2 | Pending |
-| TXNS-02 | Phase 2 | Pending |
-| RECR-01 | Phase 3 | Pending |
-| RECR-02 | Phase 3 | Pending |
-| CHAT-01 | Phase 3 | Pending |
-| CHAT-02 | Phase 3 | Pending |
-| CHAT-03 | Phase 3 | Pending |
-| DEPL-01 | Phase 4 | Pending |
-| DEPL-02 | Phase 4 | Pending |
+| FOUND-01 | TBD | Pending |
+| FOUND-02 | TBD | Pending |
+| FOUND-03 | TBD | Pending |
+| FOUND-04 | TBD | Pending |
+| FOUND-05 | TBD | Pending |
+| DASH-01 | TBD | Pending |
+| DASH-02 | TBD | Pending |
+| DASH-03 | TBD | Pending |
+| DASH-04 | TBD | Pending |
+| CHRT-01 | TBD | Pending |
+| CHRT-02 | TBD | Pending |
+| CHRT-03 | TBD | Pending |
+| CHRT-04 | TBD | Pending |
+| TXNS-01 | TBD | Pending |
+| TXNS-02 | TBD | Pending |
+| TXNS-03 | TBD | Pending |
+| TXNS-04 | TBD | Pending |
+| TXNS-05 | TBD | Pending |
+| RECR-01 | TBD | Pending |
+| RECR-02 | TBD | Pending |
+| RECR-03 | TBD | Pending |
+| CHAT-01 | TBD | Pending |
+| CHAT-02 | TBD | Pending |
+| CHAT-03 | TBD | Pending |
+| CHAT-04 | TBD | Pending |
+| CHAT-05 | TBD | Pending |
+| LAYO-01 | TBD | Pending |
+| LAYO-02 | TBD | Pending |
+| LAYO-03 | TBD | Pending |
+| LAYO-04 | TBD | Pending |
 
 **Coverage:**
-- v1 requirements: 20 total
-- Mapped to phases: 20
-- Unmapped: 0
+- v1 requirements: 30 total
+- Mapped to phases: 0
+- Unmapped: 30
 
 ---
-*Requirements defined: 2025-03-10*
-*Last updated: 2026-03-10 after roadmap creation*
+*Requirements defined: 2026-03-10*
+*Last updated: 2026-03-10 after initial definition*
