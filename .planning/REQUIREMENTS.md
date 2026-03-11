@@ -56,7 +56,7 @@ Requirements for initial release. Each maps to roadmap phases.
 - [x] **LAYO-01**: Single scrollable page with top nav bar (logo left, sign out right)
 - [x] **LAYO-02**: Desktop: single column with max-width container
 - [x] **LAYO-03**: Mobile: compact top nav, bottom tab bar for section jumps (Summary, Accounts, Transactions, Chat)
-- [ ] **LAYO-04**: Deployed to Vercel with environment variables configured
+- [x] **LAYO-04**: Deployed to Vercel with environment variables configured
 
 ## v2 Requirements
 
@@ -101,7 +101,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | LAYO-01 | Phase 1 | Complete |
 | LAYO-02 | Phase 1 | Complete |
 | LAYO-03 | Phase 1 | Complete |
-| LAYO-04 | Phase 1 | Pending |
+| LAYO-04 | Phase 1 | Complete |
 | DASH-01 | Phase 2 | Pending |
 | DASH-02 | Phase 2 | Pending |
 | DASH-03 | Phase 2 | Pending |

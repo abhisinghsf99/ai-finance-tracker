@@ -12,7 +12,7 @@ FinTrack builds a personal finance dashboard frontend on top of an existing Supa
 
 Decimal phases appear between their surrounding integers in numeric order.
 
-- [ ] **Phase 1: Foundation and Layout** - Auth gate, typed data layer, dark theme, page layout shell, and Vercel deployment
+- [x] **Phase 1: Foundation and Layout** - Auth gate, typed data layer, dark theme, page layout shell, and Vercel deployment (completed 2026-03-11)
 - [ ] **Phase 2: Dashboard Visuals** - Summary cards, account cards, spending trend chart, and category donut chart
 - [ ] **Phase 3: Interactive Panels** - Transaction list with search/filter/sort and recurring charge detection panel
 - [ ] **Phase 4: Chat System** - Floating chat drawer with Claude + MCP for natural language financial queries
@@ -89,7 +89,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Foundation and Layout | 2/3 | In Progress|  |
+| 1. Foundation and Layout | 3/3 | Complete   | 2026-03-11 |
 | 2. Dashboard Visuals | 0/3 | Not started | - |
 | 3. Interactive Panels | 0/2 | Not started | - |
 | 4. Chat System | 0/2 | Not started | - |
