@@ -1,209 +1,190 @@
 # Project Research Summary
 
-**Project:** FinTrack Frontend Dashboard
-**Domain:** Personal fintech dashboard (read-only visualization + AI chat over Plaid-backed Supabase data)
+**Project:** FinTrack — Personal Finance Dashboard
+**Domain:** Single-user personal finance dashboard (Next.js App Router + Supabase + Anthropic MCP chat)
 **Researched:** 2026-03-10
 **Confidence:** HIGH
 
 ## Executive Summary
 
-This is a personal finance dashboard built as a read-only Next.js frontend layer over an existing Supabase + Plaid backend. The backend (webhook sync, MCP server, bank linking) is already operational — the entire build is a frontend project. The recommended approach is Next.js 15.5.x with React Server Components as the primary data-fetching strategy, shadcn/ui + Recharts for the UI, and the Vercel AI SDK v6 with Anthropic's `mcp_servers` parameter for the chat interface. The app has one user, so authentication is a simple middleware password gate rather than a full auth system. The natural language chat feature — where Claude queries financial data via the existing remote MCP server — is the clear differentiator that no commercial finance app offers.
+FinTrack is a read-only personal finance dashboard that connects to an existing Supabase backend (populated via Plaid webhooks) and surfaces spending insights, account balances, transaction history, and an AI chat interface powered by Claude + MCP. The recommended build approach follows the Next.js App Router "server component with client islands" pattern: page-level server components fetch all Supabase data server-side using a typed query layer, then pass data as props to thin client components that handle interactivity (Recharts charts, collapsible panels, search filters). The chat system is an independent subsystem — a floating drawer sends messages to `/api/chat`, which orchestrates Anthropic streaming + MCP tool calls server-side and streams responses back. The stack is intentionally minimal: 4 new packages total on top of an already-solid foundation.
 
-The recommended build order follows architectural dependencies: project scaffolding and auth first, then the dashboard and transaction pages (which prove the data access pattern), then recurring charge detection, and finally the chat interface. Server Components handle all Supabase queries server-side using the `service_role` key; Client Components handle only interactivity (chart tooltips, filter inputs, chat streaming). This clean boundary eliminates the need for state management libraries and keeps financial data off the client bundle.
+The project's primary differentiator is the natural language chat interface: no consumer finance app allows arbitrary SQL-powered questions against live bank data. Everything else (balance display, spending charts, category breakdown, transaction search) matches the table stakes of Monarch Money and Empower but with a distinct dark, Copilot-style aesthetic. Research strongly recommends building the core dashboard first and adding chat second — the dashboard validates data quality and chat answers "did I overspend?" questions that would otherwise drive scope creep toward budgeting features.
 
-The dominant risks are security-related (service role key exposure, weak auth validation) and operational (Vercel timeout on the chat API route, Plaid amount sign convention confusion causing wrong totals). All of these have clear mitigations documented in research and must be addressed at the phase where they first appear, not retrofitted later.
+The highest-impact risks are: (1) Supabase `service_role` key leaking to the browser — prevented by enforcing a server-only query layer before any UI is built; (2) Recharts SSR hydration crashes — prevented by wrapping every chart with `next/dynamic({ ssr: false })` from the first chart component; (3) Plaid amount sign conventions being misapplied throughout — prevented by creating `lib/plaid-amounts.ts` before any component renders dollar amounts; and (4) Vercel streaming timeouts in the chat feature — mitigated by proper `ReadableStream` response handling and testing on Vercel early. All four have clear prevention strategies that cost minutes to establish but would cost hours to fix retroactively.
 
 ## Key Findings
 
 ### Recommended Stack
 
-The stack is tightly constrained by the existing backend: Supabase is locked in, Anthropic is locked in, and the remote MCP server at `claudefinancetracker.xyz/mcp` is already built. The frontend choices optimize for compatibility with this foundation. Next.js 15.5.x (not 14, which is near EOL; not 16, which has unsettled breaking changes) is the framework choice. shadcn/ui CLI v4 with Tailwind 4 handles the component system — notably, the new CLI consolidates radix-ui into a single dependency. Recharts 3.8.x is the charting library, accessed through shadcn's Chart component wrapper which provides 53 variants with automatic dark/light mode. The Vercel AI SDK v6 with `useChat` hook eliminates ~60% of chat UI boilerplate versus using the raw Anthropic SDK directly.
-
-See `.planning/research/STACK.md` for version compatibility matrix, installation commands, and environment variable setup.
+The project already has Next.js 15, React 19, TypeScript 5, Tailwind 4, shadcn/ui, Supabase JS, Vitest, and Lucide — all validated as correct choices. Only 4 new packages are needed: `recharts` (v3.8.0 — shadcn/ui's official chart layer), `ai` (Vercel AI SDK v6), `@ai-sdk/anthropic` (Claude provider), and `@ai-sdk/react`. One critical environment fix is also required: add `"overrides": { "react-is": "19.1.0" }` to `package.json` before installing Recharts, or charts will silently render blank under React 19.
 
 **Core technologies:**
-- Next.js 15.5.x: full-stack framework — stable production-proven version between EOL v14 and unsettled v16
-- React 19.x: UI library — required by Next.js 15, fully supported by shadcn/ui CLI v4
-- TypeScript 5.x: type safety — non-negotiable for financial amount handling; catches sign errors at compile time
-- shadcn/ui (CLI v4): component library — accessible, Tailwind-native, dark mode built-in, owned not packaged
-- Recharts 3.8.x (via shadcn Chart): data visualization — 53 chart variants, automatic theme support, no second library needed
-- @supabase/ssr 0.9.x: Supabase Next.js client — required for App Router cookie-based sessions; replaces deprecated auth-helpers
-- Vercel AI SDK 6.x + @ai-sdk/anthropic: chat infrastructure — `useChat` hook + `streamText()` handles streaming, message state, and MCP tool calls
-- Next.js Middleware (built-in): password gate auth — ~50 lines, no third-party auth service needed for single-user app
+- Recharts v3.8.0: chart rendering — shadcn/ui's official chart foundation, composable API, no wrapper lock-in
+- Vercel AI SDK v6 (`ai` + `@ai-sdk/anthropic`): chat streaming — provides `useChat`, `streamText`, and `experimental_createMCPClient` out of the box; replaces 3-4x the code the raw Anthropic SDK would require
+- `@supabase/supabase-js` (already installed): data access — all queries go through server-side service_role; `@supabase/ssr` is NOT needed for this project's password-gate auth model
+- `next-themes`: REMOVE — dark-only app does not need theme switching; hardcode dark theme in `layout.tsx` directly
+
+**Critical version note:** The `react-is` override (`"19.1.0"` to match React version) is required before adding Recharts. Without it, `ResponsiveContainer` renders blank on first load.
 
 ### Expected Features
 
-The feature landscape is well-established (Copilot, Monarch, Lunch Money, Mint are the reference implementations) with one unique differentiator: natural language chat backed by Claude + MCP. Research clearly separates what users expect universally from what sets this app apart, and explicitly lists what to defer.
-
-See `.planning/research/FEATURES.md` for full feature dependency graph and build priority ordering.
+Feature research confirms FinTrack's scope aligns with what users expect from post-Mint finance apps. The feature dependency tree is clear: auth and the query layer must exist before any dashboard component; account/spending cards come before charts; charts come before the transaction panel; recurring detection builds on the same transaction data; chat is fully independent and the highest-complexity item.
 
 **Must have (table stakes):**
-- Account balances overview — first thing every finance app user looks for
-- Net worth / net position card — assets minus liabilities; universal in modern finance apps
-- Credit utilization display — balance vs. limit as progress bar for credit accounts
-- Monthly spending total with month-over-month comparison — the most common financial question answered instantly
-- Spending by category breakdown — donut/pie chart; universally expected, Plaid provides categories automatically
-- Monthly spending trend chart — trailing 6 months bar chart showing trajectory not just snapshot
-- Transaction list with search and filters — full-text search on merchant name, filter by date/category/account/amount
-- Recent transactions on dashboard — last 15 transactions for quick "what just happened" awareness
-- Dark mode — fintech dashboard convention; financial data reads better on dark backgrounds
-- Responsive mobile layout — users check finances on phones; non-negotiable
-- Auth protection — financial data on a public URL without auth is a dealbreaker
+- Password gate with 30-day session — security baseline; users expect a gate on financial data
+- Account balance cards with net position — first thing users check in any finance app
+- Current month spending summary with month-over-month % change — the core "how am I doing?" signal
+- Monthly spending trend bar chart (6 months) — universal in Monarch, Empower, Simplifi
+- Spending by category donut chart — universal; Plaid `category_primary` maps directly to it
+- Transaction list with search and filter — second most common action after balance check
+- Mobile-responsive layout — finance apps are used across 2.7 devices on average
 
 **Should have (differentiators):**
-- Natural language chat for financial queries — the killer feature; no other personal finance app lets you ask arbitrary SQL-backed questions via Claude
-- Recurring charge detection and display — custom SQL detection logic (no Plaid paid add-on needed); monthly subscription total gives immediate cost awareness
-- Suggestion chips on empty chat state — pre-populated query ideas lower barrier to chat usage
-- Merchant logo display — Plaid provides `logo_url`; makes transaction lists scannable
-- Income vs. spending visualization — cash flow perspective beyond just expenses
+- Natural language chat interface (Claude + MCP) — primary differentiator; no competitor offers ad-hoc SQL-powered questions against live data
+- Recurring charge detection panel — now expected post-Mint; complex algorithm but high user value
+- Credit utilization bars on account cards — Empower does this, most apps do not
+- Category drill-down (click donut segment) — interaction refinement on existing chart component
 
-**Defer (Phase 2+):**
-- Push notifications and anomaly detection — Phase 2 scope; requires service worker and baseline transaction history
-- Custom category taxonomy and category management — Phase 2; requires write path
-- Budget setting and goal tracking — Phase 3; requires write operations and new UX
-- Data export (CSV/PDF) — Phase 3; chat answers analytical questions on demand
-- Investment tracking, multi-currency, real-time streaming — out of scope entirely
+**Defer (v2+):**
+- Anomaly detection / smart alerts — requires threshold config, notification delivery, false positive management
+- Budget setting / goal tracking — a full product, not a feature; chat handles ad-hoc budget questions without this overhead
+- Transaction category editing — rabbit hole of custom categories, merge rules, ML re-application
+- Multi-user / household support — requires user management, permission models, invitation flow
 
 ### Architecture Approach
 
-The architecture is a Server Component-first Next.js app where data fetching happens entirely server-side via Supabase service role key, Client Components receive data as props and handle only interactivity. URL search params drive filter state (no client-side state library needed). The chat flow is: Client Component `useChat` hook → `/api/chat` Route Handler → Anthropic SDK with `mcp_servers` parameter → Claude calls the remote MCP server automatically → streams response back. Auth is handled by middleware running on Vercel Edge, checking an HTTP-only cookie on every request.
-
-See `.planning/research/ARCHITECTURE.md` for full component boundary table, data flow diagrams, code patterns, and file structure.
+The architecture is a clean two-tier system. The dashboard tier uses Next.js App Router server components for all Supabase data fetching (parallel queries via `Promise.all` in `page.tsx`), with client component islands only for interactive elements (Recharts charts, collapsible panels, search). The chat tier is an independent streaming system: a client-side `ChatDrawer` posts to `/api/chat`, which orchestrates Anthropic SDK + MCP client server-side and returns a `ReadableStream`. The two tiers share no state and can be built in parallel — but dashboard should come first to validate the data model.
 
 **Major components:**
-1. Auth Middleware — Edge function that checks session cookie on every request; redirects to `/login` if missing
-2. Layout Shell — Sidebar navigation + theme provider; wraps all pages; mix of Server and Client
-3. Dashboard Page (Server Component) — parallel Supabase queries for balances, spending totals, category breakdown, recent transactions; passes data as props to Client Component charts
-4. Dashboard Charts (Client Components) — Recharts rendering with tooltips/hover; receives data as props; wrapped in `React.memo()`
-5. Transactions Page (Server Component) — reads URL search params, runs filtered/paginated Supabase queries server-side
-6. Transaction Filters (Client Component) — updates URL search params; triggers Server Component re-render
-7. Recurring Page (Server Component) — aggregation query for merchant detection; no client interactivity needed
-8. Chat Page (Client Component) — `useChat` hook, message history, streaming display, suggestion chips
-9. Chat API Route Handler — Anthropic SDK with `mcp_servers` parameter; Edge runtime to avoid 10s timeout; streams ReadableStream back
-10. Supabase Server Utility (`lib/supabase/server.ts`) — single factory function for service role client; used by all Server Components
+1. `lib/queries/` — typed Supabase query layer; server-only; established before any UI; enforces service_role stays server-side
+2. `components/dashboard/` — six section components: `SummaryCards` (SC), `AccountCards` (SC), `MonthlyTrend` (CC), `CategoryBreakdown` (CC), `TransactionsPanel` (CC), `RecurringPanel` (CC)
+3. `components/chat/` — `ChatDrawer`, `ChatMessages`, `ChatInput`; fully independent; floats as an overlay on all pages via the app layout
+4. `app/api/chat/route.ts` — Anthropic SDK + MCP client; streaming endpoint; holds all API keys server-side exclusively
+5. `types/database.ts` — TypeScript types mirroring Supabase schema; prevents `any` creep across all query results
+
+**Key architectural constraints — non-negotiable:**
+- `service_role` key never in client components or `NEXT_PUBLIC_` env vars
+- Recharts components always wrapped with `next/dynamic({ ssr: false })`
+- `page.tsx` files never marked `"use client"`
+- MCP client never instantiated in browser code (Node.js library, CORS-blocked anyway)
 
 ### Critical Pitfalls
 
-See `.planning/research/PITFALLS.md` for full prevention strategies, detection methods, and phase-specific warnings for all 14 identified pitfalls.
+1. **Recharts SSR hydration crash** — wrap every chart with `next/dynamic({ ssr: false }, loading: () => <ChartSkeleton />)`. Set this pattern in the first chart component so all subsequent charts copy it. Warning signs: blank charts on first load, console errors about width/height of 0, hydration text-content mismatch errors.
 
-1. **Service role key exposed to browser** — Never use `NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY`; service role key is server-only env var, accessed only in Server Components and Route Handlers. Must be correct from day 1 of scaffolding.
-2. **Plaid amount sign convention confusion** — Plaid: positive = spending, negative = income/refunds. Establish a `displayAmount()` utility and filtering convention (`amount > 0` for spending queries) before writing any chart code. Wrong convention causes incorrect totals across the entire dashboard.
-3. **Pending transaction double-counting** — Always filter `WHERE is_pending = false` for summary and chart queries. Show pending separately with a badge. Inflated totals destroy user trust.
-4. **Vercel chat API timeout** — Use Edge runtime (`export const runtime = 'edge'`) on the `/api/chat` route to get streaming timeout instead of 10s function limit. Add schema to system prompt to eliminate `get_schema` MCP round trip.
-5. **Server/client component boundary confusion** — Page files (`page.tsx`) must never have `"use client"`. Server Components fetch data; Client Components render interactivity. Establish this pattern in scaffolding and never deviate.
+2. **Supabase service_role key in client bundle** — keep `SUPABASE_SERVICE_ROLE_KEY` without `NEXT_PUBLIC_` prefix; route all queries through the `lib/queries/` server-only layer. Risk is severe: service_role bypasses all RLS, and the `institutions` table holds Plaid access tokens.
+
+3. **Plaid amount sign convention misapplied** — create `lib/plaid-amounts.ts` with `isSpending`, `isIncome`, `totalSpending`, `displayAmount` helpers BEFORE any component renders amounts. Plaid positive = spending, negative = income — opposite of developer intuition. Centralizing in one module prevents the same bug multiplying across every chart and card.
+
+4. **Vercel streaming timeout** — return `stream.toReadableStream()` directly (never buffer full response); set `export const maxDuration = 60` in the chat route config; test on Vercel before polishing chat UI. Hobby plan caps at 10 seconds; MCP tool calls alone take 2-5 seconds.
+
+5. **"use client" boundary creep** — only interactive leaf nodes get `"use client"`: chart wrappers, search inputs, collapsible triggers. `page.tsx` and section-structure components stay as server components. Creep forces `useEffect` data fetching, kills SSR benefits, and makes service_role key usage impossible safely.
 
 ## Implications for Roadmap
 
-Based on the combined research, a 4-phase structure maps cleanly to the dependency chain and risk profile of this project.
+Based on the dependency tree from FEATURES.md and the build order from ARCHITECTURE.md, here is the suggested phase structure:
 
-### Phase 1: Foundation and Auth
+### Phase 1: Foundation and Data Layer
+**Rationale:** Everything downstream depends on typed data access and security boundaries being correct from the start. Establishing `lib/queries/`, `types/database.ts`, `lib/plaid-amounts.ts`, and the auth middleware before any UI prevents the three most expensive pitfalls.
+**Delivers:** Typed Supabase query functions for all tables; Plaid amount utility module with unit tests; environment variable audit (no `NEXT_PUBLIC_` service_role key); dark theme hardcoded in `layout.tsx` (next-themes removed); `lib/formatters.ts` for currency and date formatting; `react-is` override added to `package.json`.
+**Addresses:** Auth gate (table stakes), security baseline
+**Avoids:** Pitfalls 2 (service_role exposure), 3 (Plaid amount signs), 6 ("use client" boundary creep)
 
-**Rationale:** Nothing else can be built until the project is initialized, Supabase server client is correctly set up, and auth is in place. The two most critical security pitfalls (service role key exposure, weak auth) both manifest here. Getting this right once is easier than retrofitting.
+### Phase 2: Dashboard Cards (Summary and Accounts)
+**Rationale:** These are pure server components with no interactivity — the simplest possible components that validate the query layer with real data on screen. No Recharts dependency yet. A fast confidence-builder before adding client component complexity.
+**Delivers:** Account balance cards, net position display, credit utilization bars, current month spending summary with % change vs. last month, transaction count metric.
+**Addresses:** Account overview, net position, spending summary (all P1 table stakes)
+**Avoids:** Dark theme CSS variable system is established here before charts add rendering complexity
+**Research flag:** None — server components with Supabase queries follow well-documented standard patterns.
 
-**Delivers:** A working Next.js 15 project deployed to Vercel with password-protected routes, correct Supabase client architecture (server-only service role key), and a responsive layout shell with dark mode support.
+### Phase 3: Charts (Recharts Integration)
+**Rationale:** Charts are the first client components and the first Recharts usage. Establishing `next/dynamic({ ssr: false })` and `ResponsiveContainer` with explicit pixel heights in this phase creates patterns that all future charts copy. The `react-is` override must be in `package.json` before this phase installs Recharts.
+**Delivers:** Monthly spending trend bar chart (6 months), spending by category donut chart with click-to-drill, category drill-down interaction, Recharts theme config aligned with dark CSS variables (transparent backgrounds, `hsl(var(--muted-foreground))` text, `hsl(var(--border))` grid lines).
+**Addresses:** Monthly trend chart, category breakdown (P1 table stakes)
+**Avoids:** Pitfalls 1 (SSR hydration crash), 2 (ResponsiveContainer height collapse), 7 (dark theme inconsistency in charts)
+**Research flag:** None — shadcn/ui Recharts v3 integration is well-documented; `react-is` override is a known, confirmed fix.
 
-**Addresses:** Auth protection (table stakes), dark mode (table stakes), responsive layout foundation.
+### Phase 4: Collapsible Panels (Transactions and Recurring)
+**Rationale:** These are the most interactive dashboard components with the most complex queries (pagination, search, pattern detection). Building after charts means the client component pattern is established. Recurring detection is the hardest table-stakes feature and needs focused attention.
+**Delivers:** Paginated transaction list with search (merchant name) and filter (date range, category, account); collapsible panel with expand/collapse state; recurring charge detection algorithm with merchant normalization; recurring charges list panel.
+**Addresses:** Transaction list with search/filter, recurring detection (P1 and P2 features)
+**Avoids:** Fetching all transactions client-side (paginate server-side from day one); empty data edge cases in recurring algorithm
+**Research flag:** Recurring detection algorithm needs a design spike — merchant name normalization ("Netflix" vs "NETFLIX.COM") is non-trivial and determines whether detection is reliable.
 
-**Avoids:** Pitfall 1 (service role key leak), Pitfall 2 (auth validation weakness), Pitfall 7 (server/client boundary confusion), Pitfall 9 (missing @supabase/ssr).
+### Phase 5: Chat System (Claude + MCP)
+**Rationale:** The primary differentiator, but highest complexity and risk. Building after the dashboard means real data exists to query via chat, and the team has internalized the data model. Vercel streaming must be tested on actual Vercel deployment in this phase — not just localhost — before the chat UI is polished.
+**Delivers:** `/api/chat` route handler with Anthropic streaming + MCP tool call orchestration; `ChatDrawer` floating button + sheet overlay; multi-turn conversation with full message history; streaming response display with token-by-token updates.
+**Addresses:** Natural language chat interface (primary differentiator)
+**Avoids:** Pitfall 4 (streaming timeout — test on Vercel early, not at the end); exposes need to add rate limiting on the chat endpoint; surfaces MCP server authentication gap
+**Research flag:** `experimental_createMCPClient` in Vercel AI SDK v6 is marked experimental. Validate the MCP connection to `claudefinancetracker.xyz/mcp` and the tool call flow end-to-end before designing the chat UI. The API may have rough edges not covered in docs.
 
-**Stack elements:** Next.js 15 scaffolding, shadcn/ui init, @supabase/ssr, Next.js Middleware auth gate.
-
-### Phase 2: Dashboard and Transactions
-
-**Rationale:** The dashboard is the highest user-value surface and proves the entire data access pattern works end-to-end. Once Server Component data loading is proven on the dashboard, the transactions page reuses the same patterns. All Plaid data conventions (amount signs, pending status, null merchants) must be established in this phase.
-
-**Delivers:** A fully functional dashboard with account balances, net position, credit utilization, monthly spending comparison, category donut chart, 6-month trend chart, and recent transactions. Plus a complete transaction browser with search, filters (URL-driven), and pagination.
-
-**Addresses:** Account balances, net worth card, credit utilization, monthly spending total, spending by category, trend chart, recent transactions, transaction list with search and filters, merchant logo display (all table stakes and some differentiators).
-
-**Avoids:** Pitfall 4 (amount sign convention — establish `displayAmount()` utility first), Pitfall 5 (pending double-counting — always filter `is_pending = false` for summaries), Pitfall 6 (aggregate in SQL not in JS), Pitfall 10 (Recharts memoization), Pitfall 11 (dynamic categories), Pitfall 12 (null merchant name fallback).
-
-**Stack elements:** Server Component data loading with parallel queries, URL-driven filter state, Recharts via shadcn Chart, Supabase aggregation queries.
-
-### Phase 3: Recurring Detection and Chat Interface
-
-**Rationale:** Recurring detection is a standalone page with independent SQL logic — it can be built quickly after the dashboard proves the pattern. Chat is the biggest differentiator and has the most external dependencies (Anthropic API, remote MCP server, streaming); it is correctly placed last among core features so the rest of the app is stable when debugging chat-specific issues.
-
-**Delivers:** A recurring charges page with merchant detection and monthly total. A fully functional AI chat interface with streaming responses, suggestion chips, and natural language financial queries backed by the existing MCP server.
-
-**Addresses:** Recurring charge detection (differentiator), natural language chat (killer differentiator), suggestion chips.
-
-**Avoids:** Pitfall 3 (Vercel timeout — Edge runtime from the start), Pitfall 8 (rate limiting on chat route), Pitfall 14 (schema in system prompt, prompt caching, conversation history limit).
-
-**Stack elements:** Vercel AI SDK `useChat` hook, `/api/chat` Route Handler with Edge runtime, Anthropic `mcp_servers` parameter, prompt caching with `cache_control`.
-
-### Phase 4: Deployment and Polish
-
-**Rationale:** Vercel deployment has its own failure modes (missing env vars, cookie handling on preview vs production) that are easiest to address as a dedicated step rather than discovering during earlier phases.
-
-**Delivers:** Production deployment with all environment variables configured, Vercel preview environment tested, income vs. spending visualization, and any remaining polish (per-account spending breakdown, loading skeletons, error states).
-
-**Addresses:** Income vs. spending visualization (differentiator), per-account spending breakdown (differentiator).
-
-**Avoids:** Pitfall 13 (missing Vercel env vars — checklist approach).
-
-**Stack elements:** Vercel free tier deployment, all environment variables configured in Vercel project settings.
+### Phase 6: Polish and Mobile
+**Rationale:** Polish layer that requires all sections to exist. Mobile responsiveness should be verified during each prior phase, but a dedicated polish phase catches cross-section issues (bottom nav overlapping content, chart label readability at 375px, loading state consistency).
+**Delivers:** Verified mobile layout at 375px for every section; Suspense boundaries with skeleton loaders per section; error boundaries per section; empty data edge case verification for all charts and cards; amount formatting audit ($1,234.50 consistently); UTC date handling verification for Plaid's plain-date fields.
+**Addresses:** Mobile-responsive layout (P1 table stakes)
+**Avoids:** All UX pitfalls documented in PITFALLS.md — loading states showing $0.00 as real data, raw Plaid category labels ("FOOD_AND_DRINK_RESTAURANTS"), charts without month-over-month context, empty search result feedback, mobile chart readability
+**Research flag:** None — standard polish and accessibility patterns.
 
 ### Phase Ordering Rationale
 
-- Phases 1 → 2 → 3 → 4 follow strict dependency order: auth gate before any data display, Supabase client before any queries, working data pages before adding chat on top.
-- Dashboard before Transactions because the dashboard has the most complex query types and catches data convention bugs earlier.
-- Recurring before Chat because recurring detection is a 30-minute win that demonstrates SQL aggregation patterns; chat has the most external API surface area and benefits from having all other pages stable.
-- Deployment as Phase 4 rather than post-Phase 3 cleanup because Vercel-specific issues (Edge runtime behavior, env var handling) are best validated with a dedicated checkpoint rather than discovered during feature development.
+- **Data layer before UI:** ARCHITECTURE.md explicitly calls this out. PITFALLS.md confirms that the service_role exposure, Plaid amount sign, and "use client" creep pitfalls are all prevented only if the data layer exists first.
+- **Simple server components before interactive client components:** Cards (Phase 2) before charts (Phase 3) before stateful panels (Phase 4) follows the natural dependency chain from FEATURES.md and validates each layer before adding complexity.
+- **Chat last:** FEATURES.md explicitly notes "add chat after dashboard is stable so you have something to compare AI answers against." Chat also carries the highest risk profile (experimental API, streaming, MCP round-trips). Doing it last means pitfalls in earlier phases do not block the highest-value feature.
+- **Pitfall prevention gates each phase:** Phases 1-3 collectively prevent the five most expensive pitfalls before any of the complex interactive features are built.
 
 ### Research Flags
 
-Phases likely needing deeper research during planning:
-- **Phase 3 (Chat):** The `mcp_servers` parameter on Anthropic's Messages API was noted as MEDIUM confidence in architecture research — the exact parameter shape and whether it requires a beta header needs validation against current Anthropic API docs before implementation. If unavailable, the MCP SDK Client fallback approach needs a quick research pass.
+Phases likely needing deeper research or a design spike during planning:
+- **Phase 4 (Recurring Detection):** Merchant name normalization for pattern matching is a known hard problem with no obvious off-the-shelf solution in the JS ecosystem. Evaluate fuzzy string matching approaches before committing to an algorithm.
+- **Phase 5 (Chat/MCP):** `experimental_createMCPClient` is experimental in AI SDK v6. Validate the API against the actual MCP server (`claudefinancetracker.xyz/mcp`) early — do not design the chat UI before confirming the tool call flow works end-to-end on a deployed Vercel environment.
 
-Phases with standard patterns (skip research-phase):
-- **Phase 1 (Foundation):** Next.js 15 + shadcn/ui init + middleware auth is extremely well-documented. HIGH confidence across all sources.
-- **Phase 2 (Dashboard/Transactions):** Server Component data loading, URL-driven filters, Recharts via shadcn — all established patterns with official documentation. HIGH confidence.
-- **Phase 4 (Deployment):** Vercel deployment is one of the most documented operations in web development. No research phase needed.
+Phases with standard patterns (skip `/gsd:research-phase`):
+- **Phase 1 (Foundation):** Standard Next.js environment variable patterns and Supabase server client setup.
+- **Phase 2 (Dashboard Cards):** Server components with Supabase queries — extensively documented official patterns.
+- **Phase 3 (Charts):** shadcn/ui Recharts v3 integration is documented; `next/dynamic` SSR pattern is standard.
+- **Phase 6 (Polish):** Standard mobile, accessibility, and loading state patterns.
 
 ## Confidence Assessment
 
 | Area | Confidence | Notes |
 |------|------------|-------|
-| Stack | HIGH | All version choices verified against official changelogs and npm. Next.js 15.5.x, shadcn CLI v4, AI SDK 6, @supabase/ssr 0.9.x all confirmed stable as of March 2026. |
-| Features | HIGH | Well-established product category (Copilot, Monarch, Lunch Money used as reference). Feature table stakes are non-controversial. |
-| Architecture | HIGH (with one MEDIUM) | Server Component patterns and Supabase integration are HIGH. The `mcp_servers` Anthropic API parameter is MEDIUM — parameter shape may have evolved, fallback approach is documented. |
-| Pitfalls | HIGH | All critical pitfalls verified against official Supabase, Vercel, and Plaid documentation. The service role key pitfall is confirmed by examining the existing project structure. |
+| Stack | HIGH | All packages verified on npm; `react-is` override confirmed in shadcn/ui official PR #8486; AI SDK v6 is stable and Vercel-maintained |
+| Features | HIGH | Verified against Monarch Money, Empower, Rocket Money current feature sets; competitor analysis from 2025-2026 sources |
+| Architecture | HIGH | Based on direct codebase analysis (middleware, auth, Supabase client, migration SQL) + official Next.js App Router patterns |
+| Pitfalls | HIGH | All pitfalls verified against official docs, GitHub issues (with issue numbers), and Vercel production guidance — not speculative |
 
 **Overall confidence:** HIGH
 
 ### Gaps to Address
 
-- **Anthropic `mcp_servers` parameter shape:** Verify current parameter format and whether a beta header is required before implementing Phase 3. If the parameter is unavailable, use the `@modelcontextprotocol/sdk` Client with `StreamableHTTPClientTransport` as fallback.
-- **Vercel Edge Runtime + AI SDK compatibility:** Confirm that Vercel AI SDK 6's `streamText()` is compatible with Edge runtime in Next.js 15.5.x. This combination is well-supported in principle but should be verified in a minimal test before building full chat UI.
-- **RLS policy decision:** Research noted the existing RLS only allows `service_role` access. For the single-user app architecture (all data fetching in Server Components), this is fine. If any client-side Supabase queries are added later (e.g., real-time subscriptions), `authenticated` role policies will need to be added to Supabase.
+- **Recurring detection algorithm:** Research identifies the problem scope (merchant normalization, interval detection, confidence scoring) but does not prescribe a specific implementation. Needs a design spike during Phase 4 planning.
+- **MCP server authentication:** PITFALLS.md flags `claudefinancetracker.xyz/mcp` as unauthenticated. This is a backend concern but the frontend chat route should add an API key header to MCP requests as soon as the server supports one. Flag for Phase 5.
+- **Vercel plan tier for streaming:** Hobby = 10-second limit, Pro = 60-second limit. MCP tool calls take 2-5 seconds before LLM generation begins. Confirm which plan is active before designing the chat UX — if Hobby, the MCP tool-call pattern may need adjustment (pre-fetch data as context instead of real-time tool calls).
+- **General Sans vs Satoshi font:** Stack research recommends General Sans (free, on Fontsource). If the design direction requires Satoshi specifically, it requires purchase and `next/font/local` hosting. Confirm before Phase 6.
 
 ## Sources
 
 ### Primary (HIGH confidence)
-- [Next.js 15 release blog](https://nextjs.org/blog/next-15)
-- [Next.js 16 upgrade guide](https://nextjs.org/docs/app/guides/upgrading/version-16)
-- [shadcn/ui CLI v4 changelog](https://ui.shadcn.com/docs/changelog/2026-03-cli-v4)
-- [shadcn/ui Chart component docs](https://ui.shadcn.com/docs/components/radix/chart)
-- [@supabase/ssr npm](https://www.npmjs.com/package/@supabase/ssr) — v0.9.0
-- [Supabase SSR docs for Next.js](https://supabase.com/docs/guides/auth/server-side/creating-a-client)
-- [AI SDK 6 announcement](https://vercel.com/blog/ai-sdk-6)
-- [Supabase API Keys docs](https://supabase.com/docs/guides/api/api-keys)
-- [Vercel Functions Limitations](https://vercel.com/docs/functions/limitations)
-- [Plaid Transactions API docs](https://plaid.com/docs/api/products/transactions/)
-- [Plaid Transaction States](https://plaid.com/docs/transactions/transactions-data/)
-- [Recharts npm](https://www.npmjs.com/package/recharts) — v3.8.0
+- [shadcn/ui Recharts v3 PR #8486](https://github.com/shadcn-ui/ui/pull/8486/files) — official v3 support and `react-is` override documentation
+- [shadcn/ui React 19 guide](https://ui.shadcn.com/docs/react-19) — `react-is` override requirement confirmed
+- [AI SDK v6 docs](https://ai-sdk.dev/docs/introduction) — `useChat`, `streamText`, `experimental_createMCPClient`
+- [Vercel: Common Mistakes with App Router](https://vercel.com/blog/common-mistakes-with-the-next-js-app-router-and-how-to-fix-them) — server/client boundary anti-patterns
+- [Vercel Serverless Timeout KB](https://vercel.com/kb/guide/what-can-i-do-about-vercel-serverless-functions-timing-out) — plan-level streaming timeout limits
+- [Plaid Transactions API](https://plaid.com/docs/api/products/transactions/) — amount sign convention (positive = debit/spending)
+- [Supabase API Keys Docs](https://supabase.com/docs/guides/api/api-keys) — service_role vs anon key security model
+- [Supabase RLS Docs](https://supabase.com/docs/guides/database/postgres/row-level-security) — policy best practices
+- Existing codebase: middleware, auth route, Supabase client factory, migration SQL, MCP server tools.js
 
 ### Secondary (MEDIUM confidence)
-- [Vercel basic auth template](https://vercel.com/templates/next.js/basic-auth-password) — middleware password gate pattern
-- [MCP connector docs](https://platform.claude.com/docs/en/agents-and-tools/mcp-connector) — `mcp_servers` parameter shape
-- [Anthropic Rate Limits](https://docs.anthropic.com/en/api/rate-limits)
-- [Anthropic Token-Saving Updates](https://www.anthropic.com/news/token-saving-updates) — prompt caching
+- [Monarch Money features](https://www.monarch.com/features/tracking) — competitor feature set baseline
+- [Rob Berger: Mint alternatives](https://robberger.com/mint-alternatives/) — competitive landscape
+- [The State of Personal Finance Apps in 2025](https://bountisphere.com/blog/personal-finance-apps-2025-review) — market context
+- [Top 10 AI Personal Finance Assistant Tools](https://www.bestdevops.com/top-10-ai-personal-finance-assistants-tools-in-2025-features-pros-cons-comparison/) — AI chat feature landscape
+- [Recharts ResponsiveContainer issues #1545, #3688, #5388](https://github.com/recharts/recharts/issues/) — height/resize bug documentation
 
-### Reference implementations
-- [Copilot Money](https://www.copilot.money/) — feature benchmarking
-- [Monarch Money](https://www.monarch.com) — feature benchmarking
-- [Lunch Money](https://lunchmoney.app/features) — feature benchmarking
+### Tertiary (LOW confidence, informational)
+- [Personal Finance Apps: What Users Expect in 2025](https://www.wildnetedge.com/blogs/personal-finance-apps-what-users-expect-in-2025) — user expectations survey (methodology unclear)
 
 ---
 *Research completed: 2026-03-10*

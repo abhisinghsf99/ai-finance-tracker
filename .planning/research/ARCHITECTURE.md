@@ -1,433 +1,478 @@
-# Architecture Patterns
+# Architecture Research
 
-**Domain:** Personal fintech dashboard (Next.js frontend for existing Supabase + Plaid backend)
+**Domain:** Personal finance dashboard (Next.js App Router frontend on existing Supabase backend)
 **Researched:** 2026-03-10
+**Confidence:** HIGH
 
-## Recommended Architecture
+## System Overview
 
 ```
-┌─────────────────────────────────────────────────────────────────────┐
-│  BROWSER (Client Components)                                        │
-│  ┌──────────────────┐  ┌──────────────┐  ┌───────────────────────┐ │
-│  │ Dashboard Charts  │  │ Tx Filters   │  │ Chat UI (streaming)   │ │
-│  │ Theme Toggle      │  │ Search Input │  │ Message bubbles       │ │
-│  └────────┬─────────┘  └──────┬───────┘  └───────────┬───────────┘ │
-│           │                    │                       │             │
-│  ┌────────▼────────────────────▼──┐         ┌─────────▼───────────┐ │
-│  │ Supabase Browser Client        │         │ fetch('/api/chat')  │ │
-│  │ (@supabase/ssr createBrowser)  │         │ ReadableStream      │ │
-│  └────────┬───────────────────────┘         └─────────┬───────────┘ │
-└───────────┼───────────────────────────────────────────┼─────────────┘
-            │ anon key (RLS-gated SELECTs)              │ POST
-            │                                           │
-┌───────────┼───────────────────────────────────────────┼─────────────┐
-│  VERCEL (Server)                                      │             │
-│           │                                  ┌────────▼──────────┐  │
-│  ┌────────▼────────────────────┐             │ /api/chat         │  │
-│  │ Server Components (RSC)     │             │ Route Handler     │  │
-│  │ - page.tsx data loading     │             │ Anthropic SDK     │  │
-│  │ - Suspense boundaries       │             │ + mcp_servers     │  │
-│  │ - Supabase Server Client    │             │ → stream back     │  │
-│  │   (service_role key)        │             └────────┬──────────┘  │
-│  └────────┬────────────────────┘                      │             │
-└───────────┼───────────────────────────────────────────┼─────────────┘
-            │ service_role (full access)                 │ MCP protocol
-            ▼                                           ▼
-┌────────────────────────┐              ┌────────────────────────────┐
-│  Supabase (Postgres)   │              │  Remote MCP Server         │
-│  institutions          │              │  claudefinancetracker.xyz   │
-│  accounts              │◄────────────│  /mcp                      │
-│  transactions          │  SQL via RPC │  (get_schema,              │
-│  sync_log              │              │   execute_query)            │
-└────────────────────────┘              └────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────┐
+│                    BROWSER (Single Page App)                     │
+│                                                                  │
+│  ┌──────────────┐ ┌──────────────┐ ┌──────────────┐             │
+│  │ Summary      │ │ Account      │ │ Charts       │             │
+│  │ Cards (SC)   │ │ Cards (SC)   │ │ (CC)         │             │
+│  └──────────────┘ └──────────────┘ └──────────────┘             │
+│  ┌──────────────┐ ┌──────────────┐ ┌──────────────┐             │
+│  │ Transactions │ │ Recurring    │ │ Chat Drawer  │             │
+│  │ Panel (CC)   │ │ Panel (CC)   │ │ (CC)         │             │
+│  └──────────────┘ └──────────────┘ └──────────────┘             │
+│                                                                  │
+│  SC = Server Component (data fetch at request time)              │
+│  CC = Client Component (interactivity, state, user input)        │
+├──────────────────────────────────────────────────────────────────┤
+│                    NEXT.JS SERVER (Vercel)                        │
+│                                                                  │
+│  ┌────────────────┐  ┌────────────────┐  ┌────────────────┐     │
+│  │ Server         │  │ API Route      │  │ API Route      │     │
+│  │ Components     │  │ /api/chat      │  │ /api/auth      │     │
+│  │ (data queries) │  │ (Anthropic+MCP)│  │ (password gate)│     │
+│  └───────┬────────┘  └───────┬────────┘  └────────────────┘     │
+│          │                   │                                   │
+│  ┌───────┴────────┐  ┌──────┴─────────┐                        │
+│  │ Data Queries   │  │ Anthropic SDK  │                         │
+│  │ Layer          │  │ + MCP Client   │                         │
+│  │ (lib/queries/) │  │ (lib/chat/)    │                         │
+│  └───────┬────────┘  └──────┬─────────┘                        │
+├──────────┴───────────────────┴──────────────────────────────────┤
+│                    EXTERNAL SERVICES                             │
+│                                                                  │
+│  ┌────────────────┐  ┌─────────────────────────────────────┐    │
+│  │ Supabase       │  │ MCP Server                          │    │
+│  │ (Postgres)     │  │ claudefinancetracker.xyz/mcp         │    │
+│  │ service_role   │  │ execute_query + get_schema           │    │
+│  └────────────────┘  └─────────────────────────────────────┘    │
+│                                                                  │
+│  ┌────────────────┐                                             │
+│  │ Plaid Webhook  │ (writes to Supabase, not touched by FE)    │
+│  │ → VPS          │                                             │
+│  └────────────────┘                                             │
+└─────────────────────────────────────────────────────────────────┘
 ```
 
-### Decision: Server-Side Supabase with service_role Key
+### Component Responsibilities
 
-Use Next.js Server Components with the `service_role` key through `@supabase/ssr` `createServerClient`, NOT the browser anon key. This is the right call because:
+| Component | Responsibility | Implementation |
+|-----------|----------------|----------------|
+| **Summary Cards** | Current/last month spending, % change, transaction count | Server Component. Runs aggregate SQL at request time. Pure display, no interactivity. |
+| **Account Cards** | Balance display, net position, credit utilization bars | Server Component. Fetches accounts table. Utilization bar is CSS-only (no JS needed). |
+| **Monthly Trend Chart** | Bar chart of trailing 6 months spending | Client Component wrapping Recharts. Data passed from server parent via props. |
+| **Category Donut Chart** | Spending by category with drill-down | Client Component wrapping Recharts. Drill-down state requires client interactivity. |
+| **Transactions Panel** | Collapsible list with search/filter | Client Component. Search/filter are client-side interactions on server-fetched data. |
+| **Recurring Panel** | Auto-detected recurring charges | Client Component (collapsible). Data computed server-side, interactivity client-side. |
+| **Chat Drawer** | Floating button + sliding drawer, message history | Client Component. Streams responses from /api/chat. Fully client-side state. |
+| **Data Queries Layer** | Typed Supabase queries, aggregation logic | Server-only module (lib/queries/). Never imported in client components. |
+| **Chat API Route** | Anthropic SDK + MCP client orchestration | Route Handler at /api/chat. Streams responses. Holds API keys server-side. |
+| **Auth Middleware** | Cookie-based session check | Next.js middleware (already built). Redirects unauthenticated requests. |
 
-1. **RLS is currently service_role-only.** The existing RLS policies block the anon role entirely. Adding anon SELECT policies weakens security for minimal benefit.
-2. **Single-user app.** There is no multi-user auth context where RLS user-scoping matters. The auth gate protects the entire app, not individual rows.
-3. **Server Components run on Vercel's servers.** The service_role key never reaches the browser. Data fetches happen server-side and render as HTML.
-4. **Simpler.** No RLS policy migration needed. No risk of accidentally exposing financial data through a misconfigured anon policy.
+## Recommended Project Structure
 
-The browser client (`createBrowserClient`) is only needed if client components need real-time subscriptions or interactive filtering that fetches on keystrokes. For this app, server components handle initial data loads and client components handle UI state only.
-
-### Component Boundaries
-
-| Component | Responsibility | Communicates With | Runs On |
-|-----------|---------------|-------------------|---------|
-| **Layout Shell** | Sidebar nav, theme provider, auth gate wrapper | All pages | Server + Client |
-| **Auth Middleware** | Block unauthenticated requests, validate session cookie | Every route | Edge (middleware.ts) |
-| **Dashboard Page** | Fetch summary stats, account balances, recent transactions; render charts | Supabase (server-side) | Server Component |
-| **Dashboard Charts** | Interactive Recharts rendering (tooltips, hover states) | Receives data as props from server parent | Client Component |
-| **Transactions Page** | Fetch full transaction list with server-side pagination | Supabase (server-side) | Server Component |
-| **Transaction Filters** | Search input, category/account dropdowns, date range picker | Updates URL search params (triggers server re-fetch) | Client Component |
-| **Recurring Page** | Aggregate query for recurring merchant detection | Supabase (server-side) | Server Component |
-| **Chat Page** | Chat UI shell, message history state, streaming display | /api/chat route handler | Client Component |
-| **Chat API Route** | Anthropic SDK with mcp_servers parameter, streaming response | Anthropic API, Remote MCP server | Route Handler (server) |
-| **Supabase Server Util** | Create authenticated server client for RSC/Route Handlers | Supabase | Utility (lib/) |
-| **Theme Provider** | Dark/light toggle, localStorage persistence, CSS class on html | None external | Client Component |
-
-### Data Flow
-
-**Flow 1: Dashboard Page Load**
 ```
-1. User navigates to /
-2. middleware.ts checks session cookie → allow or redirect to /login
-3. Server Component page.tsx executes:
-   a. createServerClient(supabaseUrl, serviceRoleKey)
-   b. Parallel queries:
-      - SELECT accounts with balances (JOIN institutions)
-      - SELECT SUM(amount), category_primary FROM transactions WHERE date >= month_start GROUP BY category
-      - SELECT SUM(amount) FROM transactions WHERE date >= month_start (current month total)
-      - SELECT SUM(amount) FROM transactions WHERE date in previous month (comparison)
-      - SELECT * FROM transactions ORDER BY date DESC LIMIT 15 (recent)
-      - SELECT date_trunc('month', date), SUM(amount) FROM transactions GROUP BY 1 ORDER BY 1 DESC LIMIT 6
-4. Server Component renders static HTML with data
-5. Client Components hydrate for interactivity (chart tooltips, theme toggle)
-```
-
-**Flow 2: Transaction Filtering**
-```
-1. User types in search box or selects filter
-2. Client Component updates URL search params: /transactions?search=Amazon&category=FOOD_AND_DRINK
-3. Next.js App Router re-renders the Server Component with new searchParams
-4. Server Component queries Supabase with WHERE clauses matching params
-5. Fresh HTML streamed to client via React Server Components
-```
-This pattern uses URL-driven state. No client-side state management library needed. The URL IS the state.
-
-**Flow 3: Chat Conversation**
-```
-1. User types message in chat input (Client Component)
-2. Client POSTs to /api/chat with { messages: [...history, newMessage] }
-3. Route Handler creates Anthropic client:
-   - Uses mcp_servers parameter with remote MCP URL
-   - System prompt includes financial assistant persona + Plaid amount conventions
-   - Streams response back via ReadableStream
-4. Anthropic API connects to MCP server, calls get_schema then execute_query
-5. Claude generates conversational response from query results
-6. Stream chunks arrive at client, rendered incrementally in chat bubble
-```
-
-**Flow 4: Auth (Middleware-Based Password Gate)**
-```
-1. User visits any route
-2. middleware.ts runs on Edge:
-   a. Check for session cookie (e.g., "fintrack-session")
-   b. If valid → pass through
-   c. If missing/invalid → redirect to /login
-3. /login page shows password input
-4. User submits password
-5. /api/auth Route Handler:
-   a. Compare against AUTH_PASSWORD env var (bcrypt hash comparison)
-   b. If match → set HttpOnly, Secure, SameSite=Strict cookie with signed token
-   c. If no match → return 401
-6. Client redirects to / on success
+src/
+├── app/
+│   ├── (app)/
+│   │   ├── layout.tsx              # Sidebar + mobile nav (exists)
+│   │   ├── page.tsx                # Dashboard page (server component, composes sections)
+│   │   ├── transactions/
+│   │   │   └── page.tsx            # Full transactions view
+│   │   ├── recurring/
+│   │   │   └── page.tsx            # Full recurring view
+│   │   └── chat/
+│   │       └── page.tsx            # Full-page chat (optional, drawer is primary)
+│   ├── api/
+│   │   ├── auth/
+│   │   │   └── route.ts            # Password auth (exists)
+│   │   └── chat/
+│   │       └── route.ts            # Anthropic + MCP streaming endpoint
+│   ├── login/
+│   │   └── page.tsx                # Login page (exists)
+│   └── layout.tsx                  # Root layout (exists)
+├── components/
+│   ├── layout/
+│   │   ├── sidebar.tsx             # (exists)
+│   │   ├── mobile-nav.tsx          # (exists)
+│   │   └── theme-toggle.tsx        # (exists)
+│   ├── dashboard/
+│   │   ├── summary-cards.tsx       # Server component — aggregate stats
+│   │   ├── account-cards.tsx       # Server component — balance display
+│   │   ├── monthly-trend.tsx       # Client component — Recharts bar chart
+│   │   ├── category-breakdown.tsx  # Client component — Recharts donut
+│   │   ├── transactions-panel.tsx  # Client component — collapsible + search
+│   │   └── recurring-panel.tsx     # Client component — collapsible list
+│   ├── chat/
+│   │   ├── chat-drawer.tsx         # Client component — floating button + sheet
+│   │   ├── chat-messages.tsx       # Client component — message list
+│   │   └── chat-input.tsx          # Client component — input + send
+│   └── ui/                         # shadcn components (exists)
+├── lib/
+│   ├── supabase/
+│   │   └── server.ts               # Supabase client factory (exists)
+│   ├── queries/
+│   │   ├── accounts.ts             # getAccounts, getNetPosition
+│   │   ├── transactions.ts         # getRecentTransactions, searchTransactions
+│   │   ├── spending.ts             # getMonthlySpending, getCategoryBreakdown
+│   │   ├── recurring.ts            # detectRecurringCharges
+│   │   └── summary.ts              # getCurrentMonthSpending, getSpendingChange
+│   ├── chat/
+│   │   └── client.ts               # Anthropic SDK + MCP client setup
+│   ├── formatters.ts               # Currency, date, percentage formatting
+│   └── utils.ts                    # (exists)
+├── types/
+│   └── database.ts                 # TypeScript types matching Supabase schema
+└── __tests__/                      # (exists)
 ```
 
-## Patterns to Follow
+### Structure Rationale
 
-### Pattern 1: Server Component Data Loading with Parallel Queries
+- **`lib/queries/`:** All Supabase queries isolated in one place. Server Components import from here. If a query changes, only the query file changes, not the component. This also enforces that `service_role` key usage stays server-side since these files are never imported with `"use client"`.
+- **`components/dashboard/`:** Each dashboard section is a self-contained component. Server components (summary, accounts) fetch their own data. Client components (charts, panels) receive data as props from the page-level server component.
+- **`components/chat/`:** Chat is a separate concern from dashboard visualization. The drawer pattern means it overlays on any page, so it lives in the app layout, not in any specific page.
+- **`types/database.ts`:** Single source of truth for TypeScript types. Mirror the Supabase schema. Avoids `any` creeping in through query results.
 
-**What:** Fetch all data needed for a page in the Server Component using Promise.all, then pass results as props to Client Components that handle interactivity.
+## Architectural Patterns
 
-**When:** Every page that displays Supabase data (Dashboard, Transactions, Recurring).
+### Pattern 1: Server Component Data Fetching with Client Component Islands
 
-**Why:** Server Components have zero client-side JavaScript cost. Parallel queries reduce waterfall. Data never leaves the server until it is rendered HTML.
+**What:** The dashboard page (`page.tsx`) is a server component that fetches all data, then passes it as props to client component children that handle interactivity (charts, collapsibles, search).
 
+**When to use:** Any section that needs both data and interactivity. This is the primary pattern for the entire dashboard.
+
+**Trade-offs:** Simple mental model, no client-side data fetching needed, but means a full page refresh is needed to get fresh data. Acceptable for a personal finance dashboard where data changes daily, not in real-time.
+
+**Example:**
 ```typescript
-// app/page.tsx (Server Component)
-import { createServerSupabase } from '@/lib/supabase/server'
-import { DashboardCharts } from '@/components/dashboard-charts'
-import { AccountCards } from '@/components/account-cards'
+// app/(app)/page.tsx — Server Component
+import { getMonthlySpending } from "@/lib/queries/spending"
+import { getAccounts } from "@/lib/queries/accounts"
+import { MonthlyTrend } from "@/components/dashboard/monthly-trend"
+import { SummaryCards } from "@/components/dashboard/summary-cards"
 
 export default async function DashboardPage() {
-  const supabase = createServerSupabase()
-  const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1)
-    .toISOString().split('T')[0]
-
-  const [accounts, categorySpend, recentTx] = await Promise.all([
-    supabase
-      .from('accounts')
-      .select('*, institutions(institution_name)')
-      .order('type'),
-    supabase
-      .from('transactions')
-      .select('category_primary, amount')
-      .gte('date', monthStart)
-      .gt('amount', 0),
-    supabase
-      .from('transactions')
-      .select('*')
-      .order('date', { ascending: false })
-      .limit(15),
+  const [monthlySpending, accounts] = await Promise.all([
+    getMonthlySpending(6),
+    getAccounts(),
   ])
 
   return (
-    <>
-      <AccountCards accounts={accounts.data ?? []} />
-      <DashboardCharts categoryData={categorySpend.data ?? []} />
-      <RecentTransactions transactions={recentTx.data ?? []} />
-    </>
+    <div className="space-y-6">
+      {/* Server component — renders its own data */}
+      <SummaryCards />
+
+      {/* Client component — receives data as props */}
+      <MonthlyTrend data={monthlySpending} />
+    </div>
   )
 }
 ```
 
-### Pattern 2: URL-Driven Filtering (No Client State Library)
-
-**What:** Use URL search params as the single source of truth for filters. Client Components update the URL; Server Components read searchParams and query accordingly.
-
-**When:** Transactions page filters, any filterable list.
-
-**Why:** Shareable URLs, browser back/forward works, no state management library needed, server-side filtering is more efficient than client-side.
-
 ```typescript
-// app/transactions/page.tsx (Server Component)
-export default async function TransactionsPage({
-  searchParams,
-}: {
-  searchParams: { search?: string; category?: string; page?: string }
-}) {
+// components/dashboard/monthly-trend.tsx — Client Component
+"use client"
+
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts"
+
+interface MonthlyTrendProps {
+  data: { month: string; total: number }[]
+}
+
+export function MonthlyTrend({ data }: MonthlyTrendProps) {
+  return (
+    <ResponsiveContainer width="100%" height={300}>
+      <BarChart data={data}>
+        <XAxis dataKey="month" />
+        <YAxis />
+        <Tooltip />
+        <Bar dataKey="total" fill="var(--color-primary)" radius={[6, 6, 0, 0]} />
+      </BarChart>
+    </ResponsiveContainer>
+  )
+}
+```
+
+### Pattern 2: Typed Query Layer
+
+**What:** Every Supabase query lives in `lib/queries/` as a typed async function. Each function returns a typed result, not raw Supabase responses. The query layer handles the `service_role` client creation, error handling, and data transformation.
+
+**When to use:** Every data access. No component should directly call `supabase.from(...)`.
+
+**Trade-offs:** Adds a thin layer of indirection, but prevents security mistakes (no client-side service_role usage), enables easy testing/mocking, and keeps components focused on rendering.
+
+**Example:**
+```typescript
+// lib/queries/spending.ts
+import { createServerSupabase } from "@/lib/supabase/server"
+
+export interface MonthlySpending {
+  month: string
+  total: number
+}
+
+export async function getMonthlySpending(months: number = 6): Promise<MonthlySpending[]> {
   const supabase = createServerSupabase()
-  const page = parseInt(searchParams.page ?? '1')
-  const perPage = 50
 
-  let query = supabase
-    .from('transactions')
-    .select('*, accounts(name, mask)', { count: 'exact' })
-    .order('date', { ascending: false })
-    .range((page - 1) * perPage, page * perPage - 1)
+  const { data, error } = await supabase
+    .from("transactions")
+    .select("amount, date")
+    .gte("date", getMonthsAgoDate(months))
+    .eq("is_pending", false)
 
-  if (searchParams.search) {
-    query = query.ilike('merchant_name', `%${searchParams.search}%`)
-  }
-  if (searchParams.category) {
-    query = query.eq('category_primary', searchParams.category)
-  }
+  if (error) throw new Error(`Failed to fetch spending: ${error.message}`)
 
-  const { data, count } = await query
-  // render with pagination controls
+  // Aggregate by month in JS (simpler than SQL for 6 months of data)
+  return aggregateByMonth(data)
 }
 ```
 
 ### Pattern 3: Streaming Chat via Route Handler
 
-**What:** Use the Anthropic SDK's `mcp_servers` parameter to let Claude connect to the remote MCP server directly. Stream the response back to the client using a ReadableStream.
+**What:** The `/api/chat` route handler accepts messages, calls the Anthropic API with MCP tool use, and streams the response back using the Web Streams API. The client component consumes this stream incrementally.
 
-**When:** /api/chat route handler.
+**When to use:** The chat drawer feature. This is the only feature that requires streaming and the Anthropic SDK.
 
-**Why:** The `mcp_servers` parameter offloads MCP connection management to Anthropic's infrastructure. No need to run an MCP client in the Next.js server. Streaming gives instant feedback to the user.
+**Trade-offs:** Streaming adds complexity but provides the responsive feel users expect from chat. The MCP integration means Claude can query the database directly, which is powerful but means the chat route is the most complex piece of the system.
 
+**Example:**
 ```typescript
 // app/api/chat/route.ts
-import Anthropic from '@anthropic-ai/sdk'
+import Anthropic from "@anthropic-ai/sdk"
+import { Client } from "@modelcontextprotocol/sdk/client/index.js"
 
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+export async function POST(request: Request) {
+  const { messages } = await request.json()
+  const anthropic = new Anthropic()
 
-export async function POST(req: Request) {
-  const { messages } = await req.json()
+  // Connect to MCP server for tool definitions
+  const mcpClient = new Client({ name: "fintrack-chat" })
+  // ... connect to remote MCP server
 
   const stream = anthropic.messages.stream({
-    model: 'claude-sonnet-4-20250514',
-    max_tokens: 4096,
-    system: `You are a personal financial assistant. You have access to a database...
-      IMPORTANT: In the Plaid convention, positive amounts = spending, negative = income/refunds.`,
+    model: "claude-sonnet-4-20250514",
+    max_tokens: 1024,
     messages,
-    // MCP connector — Anthropic connects to the remote MCP server server-side
-    mcp_servers: [{
-      type: 'url',
-      url: process.env.MCP_SERVER_URL!,
-      name: 'financial-db',
-    }],
+    tools: mcpTools,
   })
 
-  // Convert Anthropic's stream to a web-standard ReadableStream
-  const readable = new ReadableStream({
-    async start(controller) {
-      for await (const event of stream) {
-        if (event.type === 'content_block_delta' &&
-            event.delta.type === 'text_delta') {
-          controller.enqueue(new TextEncoder().encode(event.delta.text))
-        }
-      }
-      controller.close()
-    },
-  })
-
-  return new Response(readable, {
-    headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+  // Return streaming response
+  return new Response(stream.toReadableStream(), {
+    headers: { "Content-Type": "text/event-stream" },
   })
 }
 ```
 
-**Confidence note (MEDIUM):** The `mcp_servers` parameter for the Messages API is available as of late 2025. The exact parameter shape may have evolved. Verify against current Anthropic API docs before implementation. If `mcp_servers` is unavailable or requires a beta header, the fallback is to use the MCP SDK's `Client` class with `StreamableHTTPClientTransport` to connect to the remote MCP server from the Route Handler, then pass tools via `mcpTools()` helper.
+### Pattern 4: Collapsible Sections with URL State (optional)
 
-### Pattern 4: Supabase Client Factory
+**What:** Transactions and Recurring panels are collapsible. Use a simple client-side `useState` for expand/collapse. Search/filter state stays local to the component.
 
-**What:** Create utility functions that instantiate the correct Supabase client for server vs. client contexts.
+**When to use:** Panels that show lists of items with search/filter capabilities.
 
-**When:** Every file that touches Supabase.
+**Trade-offs:** Keeping state client-side means it resets on page reload, but this is fine for a personal dashboard. No need for URL-based state management for a single-page app.
 
-```typescript
-// lib/supabase/server.ts
-import { createClient } from '@supabase/supabase-js'
+## Data Flow
 
-export function createServerSupabase() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    { auth: { persistSession: false } }
-  )
-}
-```
-
-No `@supabase/ssr` or cookie handling needed. This is a single-user app with no Supabase Auth — the auth gate is a simple password. The server client uses the service_role key directly. No browser client is needed unless real-time subscriptions are added later.
-
-## Anti-Patterns to Avoid
-
-### Anti-Pattern 1: Client-Side Data Fetching with useEffect
-
-**What:** Fetching Supabase data in Client Components with useEffect + useState.
-
-**Why bad:** Exposes the Supabase key to the browser (even anon key is unnecessary exposure for financial data). Creates loading spinners instead of server-rendered content. Doubles the JavaScript bundle with data fetching logic. Hurts SEO (irrelevant here but bad habit).
-
-**Instead:** Server Components fetch data and pass it as props to Client Components. Client Components only handle interactivity (chart hover, filter UI, theme toggle).
-
-### Anti-Pattern 2: Global State Management Library for Dashboard Data
-
-**What:** Using Redux, Zustand, or Jotai to store dashboard data fetched from Supabase.
-
-**Why bad:** Adds complexity for zero benefit when Server Components already provide the data. URL search params handle filter state. Only the chat page has meaningful client-side state (message history), and that is local to the chat component.
-
-**Instead:** Server Components for data. URL params for filters. Local component state (useState) for chat messages and UI toggles.
-
-### Anti-Pattern 3: Building an MCP Client in Next.js
-
-**What:** Using `@modelcontextprotocol/sdk` Client in the Route Handler to manually connect to the remote MCP server, list tools, and pass them to Anthropic.
-
-**Why bad:** Adds MCP SDK dependency, session management complexity, connection lifecycle management, and error handling that Anthropic's `mcp_servers` parameter handles automatically.
-
-**Instead:** Use the `mcp_servers` parameter on the Messages API. Anthropic's infrastructure handles the MCP connection. If this parameter is unavailable, the MCP SDK client approach is the correct fallback (see Pattern 3 confidence note).
-
-### Anti-Pattern 4: Exposing service_role Key to Client Components
-
-**What:** Using `NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY` or passing the service role key to any client-side code.
-
-**Why bad:** The service_role key bypasses ALL RLS. Anyone with browser dev tools could read, modify, or delete all financial data.
-
-**Instead:** Service_role key only in server-side code (Server Components, Route Handlers, Server Actions). The key is in `SUPABASE_SERVICE_ROLE_KEY` (no `NEXT_PUBLIC_` prefix), so Next.js automatically excludes it from the client bundle.
-
-## File Structure
+### Dashboard Data Flow (Primary)
 
 ```
-app/
-├── layout.tsx              # Root layout: sidebar, theme provider, auth check
-├── page.tsx                # Dashboard (Server Component)
-├── transactions/
-│   └── page.tsx            # Transaction list (Server Component with searchParams)
-├── recurring/
-│   └── page.tsx            # Recurring charges (Server Component)
-├── chat/
-│   └── page.tsx            # Chat UI (Client Component)
-├── login/
-│   └── page.tsx            # Password input (Client Component)
-├── api/
-│   ├── chat/
-│   │   └── route.ts        # Anthropic SDK + MCP streaming
-│   └── auth/
-│       └── route.ts        # Password verification, cookie setting
-├── globals.css             # Tailwind + theme variables
-components/
-├── layout/
-│   ├── sidebar.tsx         # Navigation sidebar
-│   └── theme-toggle.tsx    # Dark/light switch (Client Component)
-├── dashboard/
-│   ├── summary-cards.tsx   # Spending totals (Server Component)
-│   ├── account-cards.tsx   # Balance display (Server Component)
-│   ├── spending-chart.tsx  # Recharts bar chart (Client Component)
-│   ├── category-chart.tsx  # Recharts donut (Client Component)
-│   └── recent-tx.tsx       # Recent transaction list (Server Component)
-├── transactions/
-│   ├── tx-table.tsx        # Transaction table rows (Server Component)
-│   ├── tx-filters.tsx      # Search + filter controls (Client Component)
-│   └── pagination.tsx      # Page navigation (Client Component)
-├── recurring/
-│   └── recurring-list.tsx  # Recurring charge cards (Server Component)
-├── chat/
-│   ├── chat-messages.tsx   # Message display (Client Component)
-│   ├── chat-input.tsx      # Input + send (Client Component)
-│   └── suggestion-chips.tsx # Empty state prompts (Client Component)
-└── ui/                     # shadcn/ui components (Button, Card, Input, etc.)
-lib/
-├── supabase/
-│   └── server.ts           # createServerSupabase() factory
-├── queries/
-│   ├── dashboard.ts        # Dashboard-specific query functions
-│   ├── transactions.ts     # Transaction queries with filter params
-│   └── recurring.ts        # Recurring detection query
-├── utils/
-│   ├── format.ts           # Currency formatting, date formatting
-│   └── categories.ts       # Category label/color mapping
-└── types/
-    └── database.ts         # TypeScript types matching Supabase schema
-middleware.ts               # Auth check on every request
+[Page Load / Navigation]
+    │
+    ▼
+[Server Component: page.tsx]
+    │
+    ├─── Promise.all([...queries])
+    │         │
+    │         ▼
+    │    [lib/queries/*] ──► [Supabase (service_role)] ──► [Postgres]
+    │         │
+    │         ▼
+    │    [Typed results]
+    │
+    ├─── Render server components inline (SummaryCards, AccountCards)
+    │
+    └─── Pass data as props to client components
+              │
+              ▼
+         [Client Components: Charts, Panels]
+              │
+              ▼
+         [Recharts renders, user interacts]
+              │
+              ▼
+         [Local state for filters, drill-down, collapse]
 ```
 
-## Suggested Build Order
-
-Dependencies flow top-to-bottom. Each step produces something testable.
+### Chat Data Flow
 
 ```
-1. Project init + Supabase server client
-   ↓ (everything depends on this)
-2. Auth middleware + login page
-   ↓ (must be in place before deploying)
-3. Layout shell (sidebar + theme)
-   ↓ (all pages render inside this)
-4. Dashboard page (server queries + static rendering)
-   ↓ (proves data flows correctly)
-5. Dashboard charts (Client Components with Recharts)
-   ↓ (adds interactivity to working page)
-6. Transactions page (server queries + URL-driven filters)
-   ↓ (reuses query patterns from dashboard)
-7. Recurring page (aggregation query)
-   ↓ (standalone, no dependencies on 5-6)
-8. Chat API route (/api/chat with Anthropic + MCP)
-   ↓ (can test with curl before building UI)
-9. Chat UI (Client Component with streaming)
-   ↓ (depends on working API route)
-10. Deploy to Vercel
+[User types message in ChatDrawer]
+    │
+    ▼
+[Client: POST /api/chat with messages array]
+    │
+    ▼
+[Route Handler: /api/chat]
+    │
+    ├─── [Anthropic SDK: create message with tools]
+    │         │
+    │         ▼
+    │    [Claude decides to use execute_query tool]
+    │         │
+    │         ▼
+    │    [MCP Client → Remote MCP Server → Supabase]
+    │         │
+    │         ▼
+    │    [Query results returned to Claude]
+    │         │
+    │         ▼
+    │    [Claude formulates response]
+    │
+    ▼
+[Streamed response back to client]
+    │
+    ▼
+[ChatDrawer updates message list incrementally]
 ```
 
-**Why this order:**
-- Steps 1-3 are foundational: cannot build pages without a working client, auth, and layout.
-- Step 4 (Dashboard) before Step 6 (Transactions) because dashboard has the most complex queries and proves the data access pattern works.
-- Step 5 (Charts) is separated from Step 4 because Recharts adds a new dependency and Client Component boundary -- cleaner to verify data rendering first, then add interactivity.
-- Steps 8-9 (Chat) are last because they depend on the Anthropic SDK and have the most external dependencies. The /api/chat route can be tested independently with curl.
-- Step 2 (Auth) is early because the app exposes real financial data. Even during development, the auth gate should be in place before any Vercel deployment.
+### Auth Flow (Already Built)
 
-## Scalability Considerations
+```
+[Any request] → [Middleware checks fintrack-session cookie]
+    │                    │
+    ├── Has cookie ──► [Allow through]
+    │
+    └── No cookie ──► [Redirect to /login]
+                           │
+                           ▼
+                      [User enters password]
+                           │
+                           ▼
+                      [POST /api/auth → validates → sets cookie (30 days)]
+                           │
+                           ▼
+                      [Redirect to /]
+```
 
-| Concern | Current (1 user, 5 accounts) | If data grows (5+ institutions, 50K+ transactions) |
-|---------|------|------|
-| **Query speed** | Direct Supabase queries, sub-100ms | Add database indexes on date+category combos; consider materialized views for monthly aggregations |
-| **Page load** | Server Component rendering, no client fetch waterfall | Add Suspense boundaries to stream data progressively |
-| **Chat latency** | Anthropic API + MCP roundtrip, 2-5s typical | Stream response to show text incrementally; no architecture change needed |
-| **Bundle size** | shadcn/ui + Recharts + Tailwind, ~150KB gzipped | Already code-split per page via App Router; Recharts only loads on dashboard/recurring |
-| **Vercel limits** | Free tier: 100GB bandwidth, 10s function timeout | Chat streaming may hit 10s timeout on complex queries; upgrade to Pro or use Edge runtime for streaming |
+### Key Data Flows
+
+1. **Dashboard load:** Single request triggers parallel Supabase queries via server components. All data is fetched server-side, rendered as HTML, and hydrated with client interactivity where needed. No client-side fetch calls for dashboard data.
+
+2. **Chat interaction:** Client sends message history to `/api/chat`. The route handler orchestrates Anthropic + MCP tool calls server-side. Response streams back. The MCP server handles its own Supabase connection independently of the dashboard data layer.
+
+3. **Data freshness:** Dashboard data is fresh on every page load (server component re-renders). No caching layer needed initially. Plaid syncs happen via webhook on the VPS, so the Supabase data updates independently of the frontend.
+
+## Anti-Patterns
+
+### Anti-Pattern 1: Client-Side Supabase Queries
+
+**What people do:** Import `createClient` in client components, use `NEXT_PUBLIC_SUPABASE_ANON_KEY` to query directly from the browser.
+
+**Why it's wrong:** RLS policies block anon access to all tables (by design). Using service_role key in the browser exposes full database access. There is no safe way to query from the client with this RLS configuration.
+
+**Do this instead:** All Supabase queries go through server components or route handlers. The `lib/queries/` layer enforces this boundary. Client components receive data as props, never fetch it.
+
+### Anti-Pattern 2: One Giant Client Component
+
+**What people do:** Mark the entire dashboard page as `"use client"` so they can use `useState` for collapsibles and charts, then use `useEffect` to fetch data.
+
+**Why it's wrong:** Loses server-side rendering benefits, ships unnecessary JS to the client, creates loading spinners everywhere, and means the service_role key can't be used (it would leak to the browser).
+
+**Do this instead:** Keep the page as a server component. Only the interactive pieces (charts, collapsibles, chat) are client components. Data flows down via props.
+
+### Anti-Pattern 3: Fetching Data Per-Component
+
+**What people do:** Each dashboard section independently fetches its own data using `useEffect` or separate server component data calls, leading to waterfall requests.
+
+**Why it's wrong:** Creates N sequential or poorly-coordinated requests. The page loads in stages with content popping in, which looks unprofessional.
+
+**Do this instead:** The page-level server component runs `Promise.all()` to fetch all data in parallel, then distributes it. One round-trip, all sections render together. For sections that are themselves server components (SummaryCards, AccountCards), Next.js automatically parallelizes their data fetching when they're siblings.
+
+### Anti-Pattern 4: Putting MCP Client Logic in Client Components
+
+**What people do:** Try to connect to the MCP server directly from the browser.
+
+**Why it's wrong:** The MCP server uses service_role credentials, and browser CORS restrictions will block the connection anyway. The MCP SDK is also a Node.js library.
+
+**Do this instead:** All MCP interaction goes through the `/api/chat` route handler. The client component only knows about the chat API endpoint.
+
+## Integration Points
+
+### External Services
+
+| Service | Integration Pattern | Notes |
+|---------|---------------------|-------|
+| **Supabase** | `supabase-js` with `service_role` key, server-side only | Already configured in `lib/supabase/server.ts`. All reads go through the typed query layer. |
+| **Anthropic API** | `@anthropic-ai/sdk` in route handler, streaming | Not yet installed. Add to dependencies. Used only in `/api/chat`. |
+| **MCP Server** | `@modelcontextprotocol/sdk` client in route handler | Remote server at `claudefinancetracker.xyz/mcp`. Stateless connection per chat request. |
+| **Plaid** | None from frontend | Webhook receiver on VPS writes to Supabase. Frontend is read-only. |
+
+### Internal Boundaries
+
+| Boundary | Communication | Notes |
+|----------|---------------|-------|
+| **Page → Query Layer** | Direct function import | Server-only. `lib/queries/` returns typed data. |
+| **Page → Client Components** | Props (serializable data) | Data crosses the server/client boundary via React props. Must be JSON-serializable. |
+| **Chat Drawer → Chat API** | HTTP POST + streaming response | Client component fetches `/api/chat`. No shared state with dashboard. |
+| **Chat API → MCP Server** | MCP protocol over HTTP | Route handler creates ephemeral MCP client connection per request. |
+| **Middleware → Auth API** | Cookie-based | Middleware reads cookie, auth API sets cookie. No shared state. |
+
+## Build Order (Dependencies)
+
+The following order respects component dependencies:
+
+1. **Types + Query Layer** (no dependencies)
+   - `types/database.ts` — TypeScript types for all tables
+   - `lib/queries/*` — All Supabase query functions
+   - `lib/formatters.ts` — Currency/date formatting utilities
+   - *Rationale:* Everything else depends on having typed data access.
+
+2. **Summary + Account Cards** (depends on: query layer)
+   - Server components that fetch and display data
+   - No client-side interactivity needed
+   - *Rationale:* Simplest components. Validates the query layer works end-to-end.
+
+3. **Charts** (depends on: query layer)
+   - Install Recharts
+   - Monthly trend bar chart
+   - Category breakdown donut chart
+   - *Rationale:* Client components, but data comes from server parent. Drill-down interactivity is self-contained.
+
+4. **Collapsible Panels** (depends on: query layer)
+   - Transactions panel with search/filter
+   - Recurring charges panel with auto-detection
+   - *Rationale:* More complex client components with local state. The recurring detection query is the most complex query to write.
+
+5. **Chat System** (independent of dashboard components)
+   - Install Anthropic SDK + MCP SDK
+   - `/api/chat` route handler with streaming
+   - Chat drawer UI (floating button + sheet)
+   - *Rationale:* Fully independent system. Can be built in parallel with dashboard components if desired, but has higher complexity and risk.
+
+6. **Polish + Mobile** (depends on: all above)
+   - Mobile bottom tab bar for section jumps (scrolling within single page)
+   - Loading states (replace skeletons with real Suspense boundaries)
+   - Error boundaries per section
+   - *Rationale:* Polish layer. Requires all sections to exist first.
+
+## Scaling Considerations
+
+| Scale | Architecture Adjustments |
+|-------|--------------------------|
+| Personal use (1 user) | Current architecture is ideal. Server components, no caching, fresh data on every load. |
+| Household (2-5 users) | Add Supabase Auth, update RLS policies with `user_id` column, add `anon` key policies. Architecture stays the same. |
+| Multi-user SaaS | Out of scope per PROJECT.md. Would need client-side auth, per-user data isolation, caching layer, connection pooling. |
+
+### Scaling Priorities (within personal use)
+
+1. **First bottleneck:** Transaction volume. After connecting 5+ institutions, the transactions table will grow. Add date-range limits to all queries (already indexed). Paginate transaction lists.
+2. **Second bottleneck:** Chat response time. MCP round-trips add latency. Consider caching MCP schema calls (it rarely changes).
 
 ## Sources
 
-- [Supabase SSR client docs](https://supabase.com/docs/guides/auth/server-side/creating-a-client)
-- [Supabase Next.js quickstart](https://supabase.com/docs/guides/getting-started/quickstarts/nextjs)
-- [Anthropic TypeScript SDK](https://github.com/anthropics/anthropic-sdk-typescript)
-- [MCP connector docs](https://platform.claude.com/docs/en/agents-and-tools/mcp-connector)
-- [Next.js App Router authentication](https://nextjs.org/learn/dashboard-app/adding-authentication)
-- [Vercel basic auth template](https://vercel.com/templates/next.js/basic-auth-password)
-- [Vercel AI SDK Anthropic provider](https://ai-sdk.dev/providers/ai-sdk-providers/anthropic)
+- Next.js App Router documentation (server/client component model, route handlers, streaming)
+- Existing codebase analysis (middleware, auth, layout, sidebar, Supabase client)
+- Supabase migration SQL (table structure, RLS policies, indexes)
+- MCP server source code (tools.js — execute_query, get_schema patterns)
+- PROJECT.md (requirements, constraints, design direction)
 
 ---
-
-*Architecture research: 2026-03-10*
+*Architecture research for: FinTrack personal finance dashboard*
+*Researched: 2026-03-10*

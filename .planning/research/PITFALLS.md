@@ -1,308 +1,361 @@
-# Domain Pitfalls
+# Pitfalls Research
 
-**Domain:** Personal fintech dashboard (Next.js + Supabase + Plaid data + Anthropic chat)
+**Domain:** Personal finance dashboard (Next.js App Router + Supabase + Recharts + Anthropic MCP chat)
 **Researched:** 2026-03-10
-**Overall confidence:** HIGH (verified against official docs, project source code, and community reports)
+**Confidence:** HIGH
 
 ## Critical Pitfalls
 
-Mistakes that cause rewrites, data exposure, or broken core functionality.
+### Pitfall 1: Recharts SSR Hydration Crash
+
+**What goes wrong:**
+Recharts uses D3 internally, which requires DOM access. Importing Recharts components in a Server Component (or even a `"use client"` component that gets server-rendered) causes hydration mismatches or outright crashes. The error manifests as `Text content does not match server-rendered HTML` or blank charts on first load.
+
+**Why it happens:**
+Next.js App Router server-renders `"use client"` components by default. Recharts measures container dimensions via `ResizeObserver` on mount, producing different output on server (zero dimensions) vs. client (actual dimensions). The `ResponsiveContainer` component fires `onResize` with width/height of 0 during SSR, triggering console warnings and sometimes rendering nothing.
+
+**How to avoid:**
+Use `next/dynamic` with `{ ssr: false }` for every Recharts chart component. Create a thin client wrapper:
+
+```typescript
+// components/charts/spending-chart.tsx
+"use client";
+import { BarChart, Bar, ResponsiveContainer, XAxis, YAxis } from "recharts";
+export function SpendingChart({ data }: Props) { /* ... */ }
+
+// Where you use it:
+import dynamic from "next/dynamic";
+const SpendingChart = dynamic(
+  () => import("@/components/charts/spending-chart").then(m => m.SpendingChart),
+  { ssr: false, loading: () => <ChartSkeleton /> }
+);
+```
+
+Never import Recharts at the top level of a page or layout component. Always provide a loading skeleton to prevent layout shift.
+
+**Warning signs:**
+- Console warnings about `width(0) and height(0) of chart should be greater than 0`
+- Charts render blank on first page load but appear after navigation
+- Hydration error in dev console mentioning text content mismatch
+
+**Phase to address:** Phase where charts are first implemented (dashboard cards/charts phase). Set the `dynamic` + `ssr: false` pattern in the very first chart component so all subsequent charts copy it.
 
 ---
 
-### Pitfall 1: Exposing the Supabase Service Role Key to the Browser
+### Pitfall 2: ResponsiveContainer Parent Height Collapse
 
-**What goes wrong:** The existing backend uses `service_role` key everywhere (webhook, MCP server) because those run on trusted servers. When building the Next.js frontend, the instinct is to reuse the same key -- but if it leaks to the client bundle, anyone can bypass RLS and read/write all financial data.
+**What goes wrong:**
+`ResponsiveContainer` with `width="100%" height="100%"` renders a chart with zero height because the parent `<div>` has no explicit height. The chart is invisible. Alternatively, if a parent has `margin`, the chart height grows infinitely in a resize loop.
 
-**Why it happens:** The project currently has RLS policies that ONLY allow `service_role` access. No `anon` or `authenticated` policies exist. Developers copy the working pattern from the webhook server into the frontend without realizing Next.js bundles `NEXT_PUBLIC_*` vars into client JS.
+**Why it happens:**
+`ResponsiveContainer` uses `ResizeObserver` on its parent. A `height="100%"` only works if the parent has a computed height. In a flex/grid layout with no explicit height, computed height is 0. This is the single most common Recharts issue filed on GitHub (issues #1545, #3688, #5388).
 
-**Consequences:** Full read/write access to all tables -- institutions (including Plaid access tokens), accounts, transactions. A leaked `service_role` key is equivalent to giving away database admin credentials.
+**How to avoid:**
+Always give `ResponsiveContainer` an explicit pixel height or use `aspect` ratio:
 
-**Prevention:**
-1. NEVER prefix the service role key with `NEXT_PUBLIC_`. Store it as `SUPABASE_SERVICE_ROLE_KEY` (server-only env var).
-2. Create a server-side Supabase client (in API routes / Server Components) that uses the service role key.
-3. Create a separate browser client using only the `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
-4. For dashboard data pages: fetch in Server Components using the service role client (keeps the key server-side), or add RLS read policies for `authenticated` role and use the anon key with auth.
+```typescript
+// GOOD: explicit height
+<ResponsiveContainer width="100%" height={300}>
+  <BarChart data={data}>...</BarChart>
+</ResponsiveContainer>
 
-**Detection:** Search codebase for `NEXT_PUBLIC_SUPABASE_SERVICE` -- if this string exists anywhere, it is a leak.
+// GOOD: aspect ratio (width auto, height calculated)
+<ResponsiveContainer width="100%" aspect={16 / 9}>
+  <PieChart>...</PieChart>
+</ResponsiveContainer>
 
-**Phase:** Must be addressed in Phase 1 (project scaffolding / Supabase client setup).
+// BAD: height="100%" with no parent height constraint
+<div>
+  <ResponsiveContainer width="100%" height="100%">
+    ...
+  </ResponsiveContainer>
+</div>
+```
 
-**Source:** [Supabase API Keys docs](https://supabase.com/docs/guides/api/api-keys), [Securing your API](https://supabase.com/docs/guides/api/securing-your-api)
+Never use `margin` on the direct parent of `ResponsiveContainer` -- use `padding` instead, or wrap in an extra div.
 
----
+**Warning signs:**
+- Chart area renders but is invisible (0px tall)
+- Chart height keeps growing on window resize
+- Console warning about chart dimensions being 0 or negative
 
-### Pitfall 2: Auth Gate That Only Checks on the Client
-
-**What goes wrong:** The auth protection uses `supabase.auth.getSession()` in a Server Component or middleware to gate access. This is spoofable -- the session comes from cookies which can be forged. The page renders sensitive financial data to anyone who crafts a valid-looking cookie.
-
-**Why it happens:** `getSession()` is faster and simpler than `getUser()`. Many tutorials use it. Developers don't realize it only reads the local JWT without validating it against Supabase Auth servers.
-
-**Consequences:** Unauthorized access to financial data. For a personal app this risk is lower (single user, likely not a target), but it is still a bad pattern that could bite if the app is ever shared or exposed.
-
-**Prevention:**
-1. Use `supabase.auth.getUser()` in middleware and Server Components -- this makes a round-trip to Supabase Auth to validate the token.
-2. In `middleware.ts`, call `getUser()` and redirect to `/login` if it fails.
-3. Never trust `getSession()` alone for protecting server-side routes.
-
-**Detection:** Grep for `getSession()` in middleware or server code without an accompanying `getUser()` call.
-
-**Phase:** Phase 1 (auth gate setup).
-
-**Source:** [Supabase Next.js SSR Auth docs](https://supabase.com/docs/guides/auth/server-side/nextjs)
+**Phase to address:** Same chart implementation phase. Establish the container pattern once in the first chart.
 
 ---
 
-### Pitfall 3: Chat API Route Timeout on Vercel Free Tier
+### Pitfall 3: Supabase Service Role Key Exposed in Browser
 
-**What goes wrong:** The `/api/chat` route calls Anthropic API, which calls the remote MCP server at `claudefinancetracker.xyz/mcp`, which queries Supabase. This chain can easily exceed 10 seconds -- especially when Claude decides to call `get_schema` first, then `execute_query`, then format a response. The Vercel Hobby tier kills serverless functions at 10 seconds.
+**What goes wrong:**
+The `service_role` key ends up in client-side JavaScript. Anyone who opens DevTools can see it, and since `service_role` bypasses all RLS policies, they have full read/write access to every table -- including `plaid_access_token` in the `institutions` table.
 
-**Why it happens:** LLM API calls with tool use involve multiple round trips. Claude may call the MCP tool 2-3 times in a single conversation turn. Each MCP call goes: Vercel -> Anthropic -> MCP server -> Supabase -> MCP server -> Anthropic -> Vercel. The cumulative latency frequently exceeds 10s.
+**Why it happens:**
+The current RLS policies only allow `service_role` access (anon is blocked on all tables). A developer's natural instinct is to use the service role key in the Supabase client to make queries work. If that client is instantiated in a `"use client"` component or imported into one, the key ships to the browser. Environment variables prefixed with `NEXT_PUBLIC_` are also bundled client-side.
 
-**Consequences:** Chat responses are cut off mid-stream. Users see "Function timeout" errors. The most valuable feature of the app (natural language financial queries) becomes unreliable.
+**How to avoid:**
+Two options (pick one):
 
-**Prevention:**
-1. Use streaming responses (`stream: true` in the Anthropic SDK). Vercel Edge Functions can stream for up to 300 seconds as long as the first byte arrives within 25 seconds.
-2. Move the chat API route to an Edge Function (`export const runtime = 'edge'`) to get longer streaming timeouts.
-3. Use Claude 3.5 Haiku for chat queries (faster responses, cheaper, sufficient for SQL generation).
-4. Pre-load schema context in the system prompt instead of having Claude call `get_schema` every turn. This eliminates one MCP round trip.
+1. **Server-side only reads (recommended for this project):** All Supabase queries go through Next.js API route handlers or Server Components using `service_role` key stored in server-only env vars (no `NEXT_PUBLIC_` prefix). The dashboard fetches data via internal API routes, never directly from Supabase in the browser.
 
-**Detection:** Test the chat with a complex financial question (e.g., "What are my top 5 spending categories this month compared to last month?"). If it times out or truncates, the timeout is the issue.
+2. **Add anon SELECT policies:** Add RLS policies granting `anon` role SELECT access on `accounts`, `transactions`, and `institutions` (excluding sensitive columns like `plaid_access_token`). Then use `SUPABASE_ANON_KEY` in the browser client. This is simpler but requires careful column-level security.
 
-**Phase:** Phase 3 (chat interface implementation). This is the single most likely phase to need debugging.
+For this project, option 1 is safer because the `institutions` table contains `plaid_access_token`. Keep `SUPABASE_SERVICE_ROLE_KEY` server-only and never prefix it with `NEXT_PUBLIC_`.
 
-**Source:** [Vercel Functions Limitations](https://vercel.com/docs/functions/limitations), [Anthropic Rate Limits](https://docs.anthropic.com/en/api/rate-limits)
+**Warning signs:**
+- `NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY` in `.env.local`
+- Supabase client instantiated in a `"use client"` file with service role key
+- `createClient` called with `service_role` key anywhere except `/api/` routes or Server Components
 
----
-
-### Pitfall 4: Plaid Amount Sign Convention Confusion
-
-**What goes wrong:** Plaid uses positive amounts for money leaving the account (expenses) and negative for money entering (income/refunds). Developers display amounts as-is, leading to charts showing "negative spending" for income, or income being summed into spending totals. Category breakdowns become nonsensical.
-
-**Why it happens:** The existing `transactions` table stores amounts using Plaid's convention directly (confirmed in webhook code: `amount: t.amount`). This is correct for storage but confusing for display. Most users expect positive = income and negative = expense (bank statement convention), or they expect separate expense/income views.
-
-**Consequences:** Dashboard cards show wrong totals. "Total spending" includes refunds as negative numbers, understating actual spend. Charts have confusing negative bars. Recurring charge detection misidentifies income as expenses.
-
-**Prevention:**
-1. Decide on a display convention early and document it. Recommendation: keep Plaid convention in DB, transform at the query/display layer.
-2. Create a utility function: `displayAmount(amount, type)` that handles the flip for the UI.
-3. For spending queries: filter to `amount > 0` (Plaid convention = money out).
-4. For income queries: filter to `amount < 0` and negate for display.
-5. Add a comment in the codebase explaining the convention near every amount display.
-
-**Detection:** Look at the dashboard summary card for "Total Spending" -- if it shows a lower number than expected, refunds/income are being subtracted.
-
-**Phase:** Phase 2 (dashboard charts and summary cards). Must be established before any amount display logic.
-
-**Source:** [Plaid Transactions API docs](https://plaid.com/docs/api/products/transactions/)
+**Phase to address:** The very first phase that connects to Supabase (data fetching). Establish the server-side-only data access pattern before any dashboard component is built.
 
 ---
 
-### Pitfall 5: Pending Transaction Double-Counting
+### Pitfall 4: Plaid Amount Sign Convention Misinterpretation
 
-**What goes wrong:** Pending and posted transactions are displayed together, causing the same charge to appear twice. Worse, pending amounts often differ from posted amounts (e.g., restaurant charges before tip), so totals are wrong in two ways: duplicated AND with the wrong amount.
+**What goes wrong:**
+Spending totals, category charts, and trend lines show wrong numbers or negative values. "Total spending this month" shows a negative number, or income transactions inflate the spending total.
 
-**Why it happens:** The database stores both pending and posted transactions. The webhook handles the lifecycle correctly (Plaid sends modified/removed events when pending becomes posted), but the frontend query may pull both if it doesn't filter on `is_pending`. During the 1-5 day window before posting, both versions exist.
+**Why it happens:**
+Plaid's convention is: **positive = money leaving the account (spending), negative = money entering (income/refunds)**. This is counterintuitive -- most developers expect positive = income. The database already stores Plaid's convention (confirmed in PROJECT.md: "positive = spending/debits, negative = income/refunds"). But when building charts and summary cards, it is easy to:
+- Filter for `amount > 0` thinking that captures income
+- Sum all amounts without filtering out refunds/income
+- Show raw positive amounts as "income" in UI labels
+- Confuse credit card vs. checking account perspectives
 
-**Consequences:** Spending totals are inflated. Transaction lists show duplicates. Charts are inaccurate. Users lose trust in the dashboard's accuracy.
+**How to avoid:**
+Create a single utility module that normalizes Plaid amounts for display:
 
-**Prevention:**
-1. Default transaction queries to `WHERE is_pending = false` for all summary/chart data.
-2. Show pending transactions separately with a visual indicator (badge, muted style).
-3. On the transactions list page, show pending with a "Pending" badge but exclude from totals.
-4. For recurring charge detection: only use posted transactions.
+```typescript
+// lib/plaid-amounts.ts
+export const isSpending = (amount: number) => amount > 0;
+export const isIncome = (amount: number) => amount < 0;
+export const displayAmount = (amount: number) => Math.abs(amount);
+export const totalSpending = (txns: Transaction[]) =>
+  txns.filter(t => t.amount > 0).reduce((sum, t) => sum + t.amount, 0);
+```
 
-**Detection:** Check if the transaction count on the dashboard is notably higher than expected. Look for transactions with the same merchant on the same date with slightly different amounts.
+Document the convention in a code comment at the top of this file. Every component that touches amounts must import from this module rather than doing its own sign logic.
 
-**Phase:** Phase 2 (transactions page and dashboard).
+**Warning signs:**
+- Summary card shows negative spending
+- Category totals don't match sum of visible transactions
+- "Income" and "spending" labels are swapped
+- Month-over-month trend goes the wrong direction
 
-**Source:** [Plaid Transaction States docs](https://plaid.com/docs/transactions/transactions-data/)
-
----
-
-## Moderate Pitfalls
-
-Issues that cause significant rework or degraded UX but won't break the app.
-
----
-
-### Pitfall 6: Fetching All Transactions for Charts Instead of Aggregating Server-Side
-
-**What goes wrong:** The frontend fetches thousands of raw transactions and aggregates them in JavaScript (grouping by category, summing by month). With 5 accounts over several months, you easily have 1,000+ transactions. This slows initial page load and makes Recharts sluggish.
-
-**Why it happens:** It is the simplest code to write. `supabase.from('transactions').select('*')` then `.reduce()` in the component. Works fine with 50 transactions, breaks down at scale.
-
-**Prevention:**
-1. Write SQL aggregation queries in Server Components or API routes: `SELECT category_primary, SUM(amount) FROM transactions WHERE amount > 0 GROUP BY category_primary`.
-2. For time-series charts: aggregate by week/month in SQL using `date_trunc()`.
-3. Only fetch raw transaction rows for the transaction list page (with pagination).
-4. Use Supabase's `.rpc()` for complex aggregations if needed.
-
-**Detection:** If the dashboard page takes more than 2 seconds to load or Recharts animations stutter, you are likely sending too much raw data.
-
-**Phase:** Phase 2 (dashboard charts).
+**Phase to address:** Data layer / utility phase (before any dashboard cards are built). The utility module must exist before any component renders amounts.
 
 ---
 
-### Pitfall 7: Server/Client Component Boundary Confusion
+### Pitfall 5: Vercel Serverless Timeout on Chat Streaming
 
-**What goes wrong:** Developers mark a page as `"use client"` to use Recharts or interactive filters, then realize they cannot use the Supabase server client (which needs server-side env vars) in that component. They either expose the service key or refactor the entire page.
+**What goes wrong:**
+The chat feature works locally but times out in production on Vercel. Long Claude responses (especially those using MCP tool calls that query the database first) get cut off mid-stream. Users see partial responses or HTTP 504 errors.
 
-**Why it happens:** Recharts components require client-side rendering. Interactive elements (filters, toggles) require client-side state. It feels natural to make the whole page a Client Component. But then you lose Server Component benefits (server-side data fetching, no client bundle bloat, secure env var access).
+**Why it happens:**
+Vercel Hobby plan has a **10-second streaming timeout**. A chat request that calls the MCP server (which executes a SQL query against Supabase, then streams Claude's analysis of the results) can easily exceed 10 seconds. The MCP tool call itself takes 2-5 seconds, leaving only 5-8 seconds for the LLM response. Pro plan extends this to 60 seconds.
 
-**Prevention:**
-1. Pattern: Server Component page fetches data, passes it as props to a Client Component chart/table.
-2. `app/dashboard/page.tsx` (Server Component) -> fetches aggregated data -> renders `<DashboardCharts data={data} />` (Client Component with `"use client"`).
-3. For interactive filters: use URL search params (`useSearchParams`) and refetch in the Server Component via the URL, or use a client-side filter on pre-fetched data.
-4. Never put `"use client"` on `page.tsx` or `layout.tsx` files.
+Additionally, the Anthropic SDK's streaming uses SSE (Server-Sent Events). If the route handler doesn't properly forward the stream (e.g., awaits the full response before sending), the connection dies.
 
-**Detection:** If `page.tsx` files have `"use client"` at the top, the boundary is wrong.
+**How to avoid:**
+- Use proper streaming in the API route handler -- return a `ReadableStream` response, don't buffer:
 
-**Phase:** Phase 1 (project structure), reinforced in Phase 2 (every page).
+```typescript
+// app/api/chat/route.ts
+export async function POST(req: Request) {
+  const stream = await anthropic.messages.stream({ ... });
+  return new Response(stream.toReadableStream(), {
+    headers: { "Content-Type": "text/event-stream" },
+  });
+}
+```
 
-**Source:** [Vercel blog: Common Next.js App Router mistakes](https://vercel.com/blog/common-mistakes-with-the-next-js-app-router-and-how-to-fix-them)
+- Set `maxDuration` in route config for Vercel Pro:
+```typescript
+export const maxDuration = 60; // seconds (Pro plan)
+```
 
----
+- For Hobby plan: consider whether the MCP tool call latency is acceptable. If not, pre-fetch data server-side and pass it as context rather than letting Claude call MCP tools in real-time.
+- Add a client-side timeout indicator so users know the response is still streaming.
 
-### Pitfall 8: No Rate Limiting or Cost Controls on the Chat API Route
+**Warning signs:**
+- Chat works locally but returns 504 in production
+- Responses cut off mid-sentence
+- First token takes > 5 seconds to appear
+- MCP tool calls succeed but response generation times out
 
-**What goes wrong:** The `/api/chat` endpoint is exposed to the internet (even behind auth). Each request costs real money (Anthropic API tokens). Without rate limiting, a bug in the frontend (infinite retry loop), a browser extension, or even enthusiastic manual use can rack up a large bill.
-
-**Why it happens:** For a personal app, rate limiting feels unnecessary. But the Anthropic API has no built-in per-endpoint spending cap -- only account-level limits.
-
-**Prevention:**
-1. Add a simple in-memory rate limiter to the chat API route (e.g., max 20 requests per minute per session).
-2. Use Claude 3.5 Haiku instead of Sonnet/Opus for financial queries -- it is 60x cheaper than Opus and fast enough for SQL generation.
-3. Set a monthly spending alert on your Anthropic account.
-4. Cache schema information in the system prompt to reduce token usage per request.
-5. Limit conversation history sent to the API (last 10 messages, not the entire thread).
-
-**Detection:** Monitor your Anthropic dashboard for unexpected spikes. Add logging to the chat API route to track request count and token usage.
-
-**Phase:** Phase 3 (chat implementation).
-
----
-
-### Pitfall 9: Missing `@supabase/ssr` Package for Next.js Integration
-
-**What goes wrong:** Developer installs only `@supabase/supabase-js` and creates a client with `createClient()`. This works for basic queries but breaks auth cookie handling in the App Router. Auth sessions don't persist across page navigations, middleware can't refresh tokens, and Server Components can't access the user session.
-
-**Why it happens:** The base `supabase-js` package works in browser and Node.js but doesn't handle Next.js cookie-based auth. Many tutorials (especially older ones) only show `supabase-js`. The need for `@supabase/ssr` is not obvious until auth breaks.
-
-**Prevention:**
-1. Install both: `npm install @supabase/supabase-js @supabase/ssr`.
-2. Create separate client utilities: `utils/supabase/client.ts` (browser) and `utils/supabase/server.ts` (server).
-3. Use `createBrowserClient()` from `@supabase/ssr` for client components.
-4. Use `createServerClient()` from `@supabase/ssr` for server components and middleware, passing cookie handlers.
-
-**Detection:** Auth works on first login but breaks on page refresh or navigation.
-
-**Phase:** Phase 1 (project setup).
-
-**Source:** [Supabase SSR docs](https://supabase.com/docs/guides/auth/server-side/creating-a-client)
+**Phase to address:** Chat implementation phase. Test streaming on Vercel early -- don't wait until the chat UI is polished.
 
 ---
 
-### Pitfall 10: Recharts Re-renders on Every Parent State Change
+### Pitfall 6: Next.js App Router "use client" Boundary Creep
 
-**What goes wrong:** Charts flicker, re-animate, or cause jank whenever a parent component's state changes (e.g., toggling dark/light theme, changing a filter in a sibling component). With multiple charts on the dashboard, this creates a poor visual experience.
+**What goes wrong:**
+Too many components get marked `"use client"`, causing the entire page to be client-rendered. The initial JavaScript bundle balloons, first contentful paint slows, and SEO (less relevant here) suffers. More importantly, server-side data fetching becomes impossible in those components, forcing unnecessary API routes or `useEffect` fetch patterns.
 
-**Why it happens:** Recharts components re-render when their parent re-renders, even if chart data hasn't changed. React's default behavior re-renders children unless explicitly memoized.
+**Why it happens:**
+A single `useState` or `onClick` handler forces `"use client"`. Since dashboard sections need interactivity (collapsible panels, search filters, chart tooltips), developers mark entire section components as client components. This pulls all child components into the client bundle too, including data-fetching logic that should stay on the server.
 
-**Prevention:**
-1. Wrap chart components in `React.memo()`.
-2. Memoize data with `useMemo()` keyed on the actual data values.
-3. Keep `dataKey` prop references stable with `useCallback()`.
-4. Disable animations after initial load (`isAnimationActive={false}`) for charts that re-render on filter changes.
-5. Isolate theme state from chart components (use CSS variables for theming, not prop-based re-renders).
+**How to avoid:**
+Follow the "server component with client islands" pattern:
+- Page-level components (`page.tsx`) stay as Server Components and fetch data
+- Pass data down as props to small, focused `"use client"` components
+- Only the interactive leaf nodes (chart wrapper, collapsible trigger, search input) need `"use client"`
 
-**Detection:** Toggle dark/light theme and watch if all charts re-animate. If they do, memoization is missing.
+```
+page.tsx (Server) -- fetches data
+  -> SummaryCards (Server) -- renders static cards
+  -> SpendingChart (Client, dynamic import) -- interactive chart
+  -> TransactionPanel (Server) -- renders structure
+    -> TransactionSearch (Client) -- search input with state
+    -> TransactionList (Server) -- renders rows
+```
 
-**Phase:** Phase 2 (dashboard polish).
+**Warning signs:**
+- `page.tsx` files have `"use client"` at the top
+- `useEffect` used to fetch data that could be fetched server-side
+- Large initial JS bundle (check with `next build` analyzer)
 
-**Source:** [Recharts Performance Guide](https://recharts.github.io/en-US/guide/performance/)
-
----
-
-## Minor Pitfalls
-
-Issues that cause small annoyances or technical debt.
-
----
-
-### Pitfall 11: Hardcoding Plaid Category Strings for Grouping
-
-**What goes wrong:** Dashboard code groups transactions by `category_primary` using hardcoded strings like `"FOOD_AND_DRINK"`, `"ENTERTAINMENT"`. Plaid updates or adds categories periodically. Hardcoded logic misses new categories or breaks on renamed ones.
-
-**Prevention:**
-1. Derive categories dynamically from the data: `SELECT DISTINCT category_primary FROM transactions`.
-2. Create a display name mapping (`FOOD_AND_DRINK` -> "Food & Drink") but default to formatting the raw string if unmapped.
-3. Use a "catch-all" / "Other" bucket for unmapped categories.
-
-**Phase:** Phase 2 (dashboard charts).
+**Phase to address:** First dashboard section phase. Establish the server/client boundary pattern with the first section, then enforce it for all subsequent sections.
 
 ---
 
-### Pitfall 12: Not Handling Null Merchant Names
+### Pitfall 7: Dark Theme Color Inconsistency Across Components
 
-**What goes wrong:** Many transactions (especially transfers, ACH payments, bank fees) have `merchant_name = null`. The transaction list shows blank rows. Category charts have a mysterious unlabeled segment. Recurring detection fails for these transactions.
+**What goes wrong:**
+Some components appear with light backgrounds, wrong text contrast, or jarring color transitions. Recharts charts use their own default colors that clash with the dark theme. Custom components outside shadcn's system use hardcoded colors that don't respect CSS variables.
 
-**Prevention:**
-1. Fall back to `name` (raw bank description) when `merchant_name` is null: `COALESCE(merchant_name, name, 'Unknown')`.
-2. Apply this fallback consistently across all queries and display components.
+**Why it happens:**
+shadcn/ui uses CSS variables (`--background`, `--foreground`, `--card`, etc.) defined in `:root` and `.dark` selectors. Recharts has its own default styling (white backgrounds, black text, built-in color palette). Custom Tailwind classes like `bg-white`, `text-black`, or `border-gray-200` bypass the CSS variable system entirely. Since FinTrack is dark-only, it is easy to miss these because there is no light/dark toggle to reveal inconsistencies -- but they still appear as "slightly wrong" shades.
 
-**Phase:** Phase 2 (transactions page).
+**How to avoid:**
+- Define a Recharts theme config that pulls from CSS variables:
+```typescript
+const CHART_THEME = {
+  backgroundColor: "transparent",
+  textColor: "hsl(var(--muted-foreground))",
+  gridColor: "hsl(var(--border))",
+  tooltipBg: "hsl(var(--popover))",
+  tooltipText: "hsl(var(--popover-foreground))",
+};
+```
+- Never use raw Tailwind colors (`bg-white`, `text-gray-900`) -- always use semantic tokens (`bg-background`, `text-foreground`, `bg-card`)
+- Define the category color palette (10+ colors for spending categories) as CSS variables so they are centralized
+- Set Recharts `<Tooltip>` and `<Legend>` custom content components that use shadcn styling
 
----
+**Warning signs:**
+- White flashes or light-colored elements on the dark page
+- Chart tooltips with white backgrounds and black text
+- Inconsistent border colors between shadcn cards and custom components
+- Chart axis labels unreadable against dark background
 
-### Pitfall 13: Forgetting Vercel Environment Variables for Production
-
-**What goes wrong:** The app works locally with `.env.local` but breaks on Vercel deployment because environment variables weren't added to the Vercel project settings. The Supabase client silently fails or returns empty data, and the error isn't obvious.
-
-**Prevention:**
-1. Add ALL required env vars to Vercel project settings before first deployment: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `ANTHROPIC_API_KEY`.
-2. Add startup validation in the app (check for missing vars and throw descriptive errors).
-3. Use Vercel's "Preview" environment for testing before promoting to production.
-
-**Phase:** Phase 4 (deployment).
-
----
-
-### Pitfall 14: Chat System Prompt Sending Full Schema Every Message
-
-**What goes wrong:** Each chat message includes the full database schema in the system prompt plus the entire conversation history. Token usage grows quadratically with conversation length. A 10-message conversation about spending could cost 10x what it should.
-
-**Prevention:**
-1. Include schema in the system prompt once (it does not change between messages).
-2. Use Anthropic's prompt caching (`cache_control` parameter) to cache the system prompt -- reduces cost by up to 90% on subsequent messages.
-3. Limit conversation history to the last 10 messages.
-4. Summarize older messages if context is needed.
-
-**Phase:** Phase 3 (chat implementation).
-
-**Source:** [Anthropic Token-Saving Updates](https://www.anthropic.com/news/token-saving-updates)
+**Phase to address:** Theme/design system setup phase (before any visual components). Define the full dark palette and Recharts theme config upfront.
 
 ---
 
-## Phase-Specific Warnings
+## Technical Debt Patterns
 
-| Phase Topic | Likely Pitfall | Mitigation |
-|-------------|---------------|------------|
-| Project scaffolding & auth | Service role key leak (#1), Missing @supabase/ssr (#9), Client/server boundary (#7) | Set up Supabase client utilities correctly from day 1. Two files: client.ts and server.ts. Never expose service key. |
-| Dashboard & transactions | Amount sign confusion (#4), Pending double-counting (#5), Raw data over-fetching (#6), Null merchants (#12) | Establish amount display convention before writing any chart code. Always filter pending for summaries. Aggregate in SQL. |
-| Chat interface | Vercel timeout (#3), No rate limiting (#8), Schema token bloat (#14) | Use Edge runtime + streaming from the start. Add rate limiting. Use prompt caching. Pick Haiku for cost efficiency. |
-| Deployment | Missing env vars (#13), Auth cookie handling | Checklist of all required env vars. Test auth flow on Vercel preview before launch. |
+| Shortcut | Immediate Benefit | Long-term Cost | When Acceptable |
+|----------|-------------------|----------------|-----------------|
+| Hardcoding Plaid amount logic in each component | Faster to build one component | Sign bugs multiply across every chart/card, inconsistent display | Never -- create the utility module first |
+| Using `useEffect` for all data fetching | Familiar pattern, works everywhere | Waterfalls, loading spinners everywhere, no server-side rendering benefit | Only for real-time polling (e.g., pending transactions) |
+| Inline Supabase queries in components | Quick prototyping | Query logic scattered, no caching layer, hard to optimize | MVP only, refactor before adding more sections |
+| Skipping loading/error states for charts | Ship the happy path faster | Blank areas when data loads slowly, unhandled Supabase errors crash the page | Never -- skeleton + error boundary from day one |
+| Single massive `page.tsx` for all dashboard sections | Everything in one file is simple | Unmaintainable, can't optimize individual sections, testing impossible | Never -- extract sections into components immediately |
+
+## Integration Gotchas
+
+| Integration | Common Mistake | Correct Approach |
+|-------------|----------------|------------------|
+| Supabase RLS + anon key | Creating a browser Supabase client with `service_role` key because anon is blocked by RLS | Either add SELECT policies for anon role, or use server-side-only queries via API routes |
+| Recharts + Next.js SSR | Importing Recharts directly in page components | Always use `next/dynamic` with `{ ssr: false }` and provide loading skeletons |
+| Anthropic SDK streaming | Awaiting full response then sending to client | Return `stream.toReadableStream()` directly from the route handler |
+| Anthropic MCP client | Initializing MCP client per request (expensive) | Initialize once at module scope or use a singleton; MCP client connection is stateful |
+| Supabase realtime | Subscribing to table changes in every component | Not needed for this project -- data updates via webhook, not user actions. Simple ISR or polling is sufficient |
+| Plaid amounts in SQL aggregations | `SUM(amount)` without filtering -- mixes spending and income | `SUM(amount) FILTER (WHERE amount > 0)` for spending, `SUM(ABS(amount)) FILTER (WHERE amount < 0)` for income |
+
+## Performance Traps
+
+| Trap | Symptoms | Prevention | When It Breaks |
+|------|----------|------------|----------------|
+| Fetching all transactions client-side | Slow initial load, browser memory spike | Paginate server-side, fetch only what's visible. Use cursor-based pagination on `transactions.date` | > 1,000 transactions (a few months of data) |
+| Re-rendering all charts on any state change | Laggy scrolling, chart flickering | Memoize chart components with `React.memo`, isolate state per section | > 3 charts on page simultaneously |
+| No Supabase query result caching | Every scroll or re-render re-fetches the same data | Use Next.js `fetch` cache or React `cache()` in Server Components. Set `revalidate` interval | Any amount of traffic (wastes Supabase quota) |
+| Loading all 6 months of chart data on page load | 3+ second initial load | Lazy-load chart data per section as user scrolls into view, or use `Suspense` boundaries per section | > 500 transactions per month |
+| Unoptimized Recharts re-renders | Charts flicker when parent re-renders | Pass stable `data` references (useMemo), avoid spreading new objects as chart props | Always -- Recharts diffs by reference |
+
+## Security Mistakes
+
+| Mistake | Risk | Prevention |
+|---------|------|------------|
+| `NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY` | Full database access from any browser -- attacker can read Plaid access tokens, modify/delete all financial data | Never prefix service role key with `NEXT_PUBLIC_`. Keep it in server-only env vars. Verify with `next build` that the key doesn't appear in client bundles |
+| Anthropic API key in client bundle | Anyone can make API calls billed to your account | Always call Anthropic from API route handlers, never from `"use client"` components. Store as `ANTHROPIC_API_KEY` (no `NEXT_PUBLIC_` prefix) |
+| Password stored in `NEXT_PUBLIC_` env var | Login password visible in page source | Store as `APP_PASSWORD` (server-only). Login form POSTs to API route that validates and sets httpOnly cookie |
+| No rate limiting on chat endpoint | Bot or curious user can run up Anthropic API bill | Add basic rate limiting in the chat API route (e.g., in-memory counter, 20 requests per minute) |
+| MCP server at claudefinancetracker.xyz/mcp is authless | Anyone who discovers the URL can query your financial database | Add authentication to the MCP server (API key header), or restrict to server-side calls only from known IPs |
+
+## UX Pitfalls
+
+| Pitfall | User Impact | Better Approach |
+|---------|-------------|-----------------|
+| No loading states for financial data | User sees blank cards, thinks app is broken | Skeleton loaders matching exact card dimensions. Never show $0.00 as a loading state -- it looks like real data |
+| Showing raw Plaid category names | "FOOD_AND_DRINK_RESTAURANTS" is ugly and confusing | Map to human-friendly labels: "Restaurants & Dining". Create a category display map |
+| Charts without context | A bar chart showing $2,400 in March means nothing without comparison | Always show month-over-month change (% and absolute). Add average line to bar charts |
+| Transaction search with no results feedback | Empty white space when filter returns nothing | "No transactions match your search" with suggestion to clear filters |
+| Collapsible panels all closed on load | User lands on page and sees only summary cards with no detail | Default first section (recent transactions) to expanded. Persist expand/collapse state in localStorage |
+| Mobile charts too small to read | Donut chart labels overlap, bar chart x-axis unreadable | On mobile: simplify charts (fewer data points, abbreviated labels), or stack chart + legend vertically |
+
+## "Looks Done But Isn't" Checklist
+
+- [ ] **Charts:** Renders with sample data but crashes with empty data (no transactions in a month) -- verify charts handle empty arrays gracefully
+- [ ] **Summary cards:** Shows current values but "% change from last month" divides by zero when last month had no transactions
+- [ ] **Login:** Password check works but session cookie has no expiration -- verify 30-day TTL and httpOnly flag
+- [ ] **Chat streaming:** First message works but conversation history is not sent with subsequent messages -- verify multi-turn context
+- [ ] **Mobile nav:** Bottom tab bar looks correct but overlaps the last section content -- verify `padding-bottom` on main content
+- [ ] **Credit utilization bars:** Render but don't handle accounts with null `balance_limit` (checking/savings accounts)
+- [ ] **Recurring detection:** Shows recurring charges but doesn't handle merchants with slightly different names ("Netflix" vs "NETFLIX.COM")
+- [ ] **Amount formatting:** Displays $1234.5 instead of $1,234.50 -- verify `Intl.NumberFormat` with exactly 2 decimal places
+- [ ] **Date handling:** Works in dev but shows wrong dates in production due to timezone offset -- verify UTC-consistent date handling with Plaid's `date` field (which is a plain date, not a timestamp)
+- [ ] **Category donut chart:** Shows all categories including a massive "Other" wedge that dwarfs everything else -- verify top-N with grouped remainder
+
+## Recovery Strategies
+
+| Pitfall | Recovery Cost | Recovery Steps |
+|---------|---------------|----------------|
+| Service role key leaked in client bundle | HIGH | Rotate key immediately in Supabase dashboard, redeploy with server-only access pattern, audit for unauthorized access in Supabase logs |
+| Plaid amount signs wrong throughout app | MEDIUM | Create utility module, find/replace all raw `amount` references, add unit tests for sign convention |
+| Recharts SSR crashes in production | LOW | Wrap each chart import with `dynamic({ ssr: false })` -- can be done incrementally per component |
+| Chat timeouts on Vercel Hobby | LOW | Add `maxDuration` config, upgrade to Pro if needed, or pre-fetch data instead of MCP tool calls |
+| Dark theme inconsistencies | LOW | Audit all components for raw color classes, replace with CSS variable tokens -- tedious but mechanical |
+| "use client" boundary creep | MEDIUM | Refactoring nested components from client to server requires restructuring data flow -- harder the more components are affected |
+
+## Pitfall-to-Phase Mapping
+
+| Pitfall | Prevention Phase | Verification |
+|---------|------------------|--------------|
+| Recharts SSR hydration crash | Charts implementation | First chart renders without hydration errors in `next dev` and `next build` |
+| ResponsiveContainer height collapse | Charts implementation | All charts visible on first load, no zero-height containers |
+| Service role key exposure | Data layer / Supabase connection | `grep -r "NEXT_PUBLIC.*SERVICE_ROLE" .env*` returns nothing. Client bundle analysis shows no key |
+| Plaid amount sign convention | Data utilities (before any UI) | Unit tests pass for `isSpending`, `isIncome`, `totalSpending` with positive and negative amounts |
+| Vercel streaming timeout | Chat implementation | Chat response streams successfully on Vercel deployment, not just localhost |
+| "use client" boundary creep | First dashboard section | `page.tsx` files are Server Components. `"use client"` only on leaf interactive components |
+| Dark theme inconsistency | Design system / theme setup | Visual audit of every component in browser -- no white flashes, readable text, consistent borders |
+| Mobile responsiveness | Each section implementation | Test every section at 375px width (iPhone SE) during implementation, not after |
+| Empty data edge cases | Each section implementation | Verify each chart/card/panel with empty arrays and zero values before marking section complete |
 
 ## Sources
 
-- [Supabase API Keys](https://supabase.com/docs/guides/api/api-keys)
-- [Supabase Securing Your API](https://supabase.com/docs/guides/api/securing-your-api)
-- [Supabase Next.js SSR Auth](https://supabase.com/docs/guides/auth/server-side/nextjs)
-- [Supabase SSR Client Setup](https://supabase.com/docs/guides/auth/server-side/creating-a-client)
-- [Vercel Functions Limitations](https://vercel.com/docs/functions/limitations)
-- [Vercel Common Next.js App Router Mistakes](https://vercel.com/blog/common-mistakes-with-the-next-js-app-router-and-how-to-fix-them)
-- [Plaid Transactions API](https://plaid.com/docs/api/products/transactions/)
-- [Plaid Transaction States](https://plaid.com/docs/transactions/transactions-data/)
-- [Anthropic Rate Limits](https://docs.anthropic.com/en/api/rate-limits)
-- [Anthropic Token-Saving Updates](https://www.anthropic.com/news/token-saving-updates)
-- [Recharts Performance Guide](https://recharts.github.io/en-US/guide/performance/)
+- [Next.js Hydration Error Docs](https://nextjs.org/docs/messages/react-hydration-error) -- official hydration error reference
+- [Recharts ResponsiveContainer #1545](https://github.com/recharts/recharts/issues/1545) -- height not filling
+- [Recharts ResponsiveContainer #5388](https://github.com/recharts/recharts/issues/5388) -- infinite height with parent margin
+- [Recharts SSR #2918](https://github.com/recharts/recharts/issues/2918) -- Next.js SSR errors
+- [Supabase API Keys Docs](https://supabase.com/docs/guides/api/api-keys) -- anon vs service_role security
+- [Supabase RLS Docs](https://supabase.com/docs/guides/database/postgres/row-level-security) -- policy best practices
+- [Plaid Transactions API](https://plaid.com/docs/api/products/transactions/) -- amount sign convention
+- [Vercel Common Mistakes with App Router](https://vercel.com/blog/common-mistakes-with-the-next-js-app-router-and-how-to-fix-them) -- official Vercel guidance
+- [Vercel Serverless Timeout KB](https://vercel.com/kb/guide/what-can-i-do-about-vercel-serverless-functions-timing-out) -- timeout limits by plan
+- [Vercel SSE Discussion](https://github.com/vercel/next.js/discussions/48427) -- SSE in Next.js API routes
+- [shadcn/ui Theming Docs](https://ui.shadcn.com/docs/theming) -- CSS variable system
+- [Anthropic Streaming Docs](https://docs.anthropic.com/en/api/messages-streaming) -- SSE streaming reference
+
+---
+*Pitfalls research for: FinTrack personal finance dashboard*
+*Researched: 2026-03-10*
