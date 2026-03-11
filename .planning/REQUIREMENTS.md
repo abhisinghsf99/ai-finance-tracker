@@ -91,32 +91,32 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| FOUND-01 | TBD | Pending |
-| FOUND-02 | TBD | Pending |
-| FOUND-03 | TBD | Pending |
-| FOUND-04 | TBD | Pending |
-| FOUND-05 | TBD | Pending |
-| DASH-01 | TBD | Pending |
-| DASH-02 | TBD | Pending |
-| DASH-03 | TBD | Pending |
-| DASH-04 | TBD | Pending |
-| DASH-05 | TBD | Pending |
-| DASH-06 | TBD | Pending |
-| TXNS-01 | TBD | Pending |
-| TXNS-02 | TBD | Pending |
-| RECR-01 | TBD | Pending |
-| RECR-02 | TBD | Pending |
-| CHAT-01 | TBD | Pending |
-| CHAT-02 | TBD | Pending |
-| CHAT-03 | TBD | Pending |
-| DEPL-01 | TBD | Pending |
-| DEPL-02 | TBD | Pending |
+| FOUND-01 | Phase 1 | Pending |
+| FOUND-02 | Phase 1 | Pending |
+| FOUND-03 | Phase 1 | Pending |
+| FOUND-04 | Phase 1 | Pending |
+| FOUND-05 | Phase 1 | Pending |
+| DASH-01 | Phase 2 | Pending |
+| DASH-02 | Phase 2 | Pending |
+| DASH-03 | Phase 2 | Pending |
+| DASH-04 | Phase 2 | Pending |
+| DASH-05 | Phase 2 | Pending |
+| DASH-06 | Phase 2 | Pending |
+| TXNS-01 | Phase 2 | Pending |
+| TXNS-02 | Phase 2 | Pending |
+| RECR-01 | Phase 3 | Pending |
+| RECR-02 | Phase 3 | Pending |
+| CHAT-01 | Phase 3 | Pending |
+| CHAT-02 | Phase 3 | Pending |
+| CHAT-03 | Phase 3 | Pending |
+| DEPL-01 | Phase 4 | Pending |
+| DEPL-02 | Phase 4 | Pending |
 
 **Coverage:**
 - v1 requirements: 20 total
-- Mapped to phases: 0
-- Unmapped: 20 ⚠️
+- Mapped to phases: 20
+- Unmapped: 0
 
 ---
 *Requirements defined: 2025-03-10*
-*Last updated: 2025-03-10 after initial definition*
+*Last updated: 2026-03-10 after roadmap creation*
