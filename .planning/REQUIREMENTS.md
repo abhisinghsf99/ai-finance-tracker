@@ -39,8 +39,8 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Recurring
 
-- [ ] **RECR-01**: Recurring charges in collapsible panel, default collapsed showing monthly total
-- [ ] **RECR-02**: Each recurring entry shows merchant name, amount, frequency, last charge date, charge count
+- [x] **RECR-01**: Recurring charges in collapsible panel, default collapsed showing monthly total
+- [x] **RECR-02**: Each recurring entry shows merchant name, amount, frequency, last charge date, charge count
 - [x] **RECR-03**: Detection logic groups by merchant_name + rounded amount with COUNT >= 3 and frequency inference
 
 ### Chat
@@ -115,8 +115,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | TXNS-03 | Phase 3 | Complete |
 | TXNS-04 | Phase 3 | Complete |
 | TXNS-05 | Phase 3 | Complete |
-| RECR-01 | Phase 3 | Pending |
-| RECR-02 | Phase 3 | Pending |
+| RECR-01 | Phase 3 | Complete |
+| RECR-02 | Phase 3 | Complete |
 | RECR-03 | Phase 3 | Complete |
 | CHAT-01 | Phase 4 | Pending |
 | CHAT-02 | Phase 4 | Pending |
