@@ -1,51 +1,25 @@
-import { Skeleton } from "@/components/ui/skeleton"
-
 export default function DashboardPage() {
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          Your financial overview will appear here.
-        </p>
-      </div>
+    <div className="space-y-8">
+      <section id="summary" className="scroll-mt-16 mb-8">
+        <h2 className="text-xl font-semibold mb-4">Summary</h2>
+        <p className="text-muted-foreground">Coming in Phase 2</p>
+      </section>
 
-      {/* Account cards skeleton */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {Array.from({ length: 3 }).map((_, i) => (
-          <div
-            key={i}
-            className="rounded-xl border border-border bg-card p-5 space-y-3"
-          >
-            <Skeleton className="h-4 w-24" />
-            <Skeleton className="h-8 w-32" />
-            <Skeleton className="h-3 w-20" />
-          </div>
-        ))}
-      </div>
+      <section id="accounts" className="scroll-mt-16 mb-8">
+        <h2 className="text-xl font-semibold mb-4">Accounts</h2>
+        <p className="text-muted-foreground">Coming in Phase 2</p>
+      </section>
 
-      {/* Chart skeleton */}
-      <div className="rounded-xl border border-border bg-card p-5 space-y-4">
-        <Skeleton className="h-5 w-40" />
-        <Skeleton className="h-48 w-full rounded-lg" />
-      </div>
+      <section id="transactions" className="scroll-mt-16 mb-8">
+        <h2 className="text-xl font-semibold mb-4">Transactions</h2>
+        <p className="text-muted-foreground">Coming in Phase 3</p>
+      </section>
 
-      {/* Recent transactions skeleton */}
-      <div className="rounded-xl border border-border bg-card p-5 space-y-4">
-        <Skeleton className="h-5 w-44" />
-        <div className="space-y-3">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <div key={i} className="flex items-center gap-4">
-              <Skeleton className="h-10 w-10 rounded-full" />
-              <div className="flex-1 space-y-2">
-                <Skeleton className="h-4 w-36" />
-                <Skeleton className="h-3 w-24" />
-              </div>
-              <Skeleton className="h-4 w-16" />
-            </div>
-          ))}
-        </div>
-      </div>
+      <section id="chat" className="scroll-mt-16 mb-8">
+        <h2 className="text-xl font-semibold mb-4">Chat</h2>
+        <p className="text-muted-foreground">Coming in Phase 4</p>
+      </section>
     </div>
   )
 }

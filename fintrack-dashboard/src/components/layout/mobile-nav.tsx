@@ -1,11 +1,9 @@
 "use client"
 
-import Link from "next/link"
-import { usePathname } from "next/navigation"
 import {
   LayoutDashboard,
+  Wallet,
   ArrowLeftRight,
-  Repeat,
   MessageSquare,
   type LucideIcon,
 } from "lucide-react"
@@ -18,46 +16,35 @@ interface NavItem {
 }
 
 const navItems: NavItem[] = [
-  { href: "/", icon: LayoutDashboard, label: "Dashboard" },
-  { href: "/transactions", icon: ArrowLeftRight, label: "Transactions" },
-  { href: "/recurring", icon: Repeat, label: "Recurring" },
-  { href: "/chat", icon: MessageSquare, label: "Chat" },
+  { href: "#summary", icon: LayoutDashboard, label: "Summary" },
+  { href: "#accounts", icon: Wallet, label: "Accounts" },
+  { href: "#transactions", icon: ArrowLeftRight, label: "Transactions" },
+  { href: "#chat", icon: MessageSquare, label: "Chat" },
 ]
 
 export function MobileNav({ className }: { className?: string }) {
-  const pathname = usePathname()
-
   return (
     <nav
       className={cn(
-        "fixed bottom-0 left-0 right-0 z-50 flex items-center justify-around border-t border-border bg-card px-2 pb-[env(safe-area-inset-bottom,0px)] pt-2",
+        "fixed bottom-0 left-0 right-0 z-40 border-t border-border bg-background/95 backdrop-blur md:hidden",
         className
       )}
     >
-      {navItems.map((item) => {
-        const isActive =
-          item.href === "/"
-            ? pathname === "/"
-            : pathname.startsWith(item.href)
-        const Icon = item.icon
-
-        return (
-          <Link
-            key={item.href}
-            href={item.href}
-            className={cn(
-              "flex flex-col items-center gap-0.5 px-3 py-1.5 transition-colors duration-200 cursor-pointer",
-              isActive ? "text-primary" : "text-muted-foreground"
-            )}
-          >
-            <Icon className="h-5 w-5" />
-            <span className="text-[10px] font-medium">{item.label}</span>
-            {isActive && (
-              <span className="absolute bottom-1 h-1 w-1 rounded-full bg-primary" />
-            )}
-          </Link>
-        )
-      })}
+      <div className="flex items-center justify-around px-2 pb-[env(safe-area-inset-bottom,0px)] pt-2">
+        {navItems.map((item) => {
+          const Icon = item.icon
+          return (
+            <a
+              key={item.href}
+              href={item.href}
+              className="flex flex-col items-center gap-0.5 px-3 py-1.5 text-muted-foreground transition-colors duration-200 hover:text-primary"
+            >
+              <Icon className="h-5 w-5" />
+              <span className="text-xs font-medium">{item.label}</span>
+            </a>
+          )
+        })}
+      </div>
     </nav>
   )
 }
