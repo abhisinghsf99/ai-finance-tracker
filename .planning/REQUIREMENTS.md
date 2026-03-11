@@ -31,8 +31,8 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Transactions
 
-- [ ] **TXNS-01**: Recent transactions in collapsible panel, default collapsed showing count
-- [ ] **TXNS-02**: Expanded transactions show merchant name, amount, category, date, account (last 4)
+- [x] **TXNS-01**: Recent transactions in collapsible panel, default collapsed showing count
+- [x] **TXNS-02**: Expanded transactions show merchant name, amount, category, date, account (last 4)
 - [x] **TXNS-03**: Search transactions by merchant name or description
 - [x] **TXNS-04**: Filter transactions by date range, category, amount range, and account
 - [x] **TXNS-05**: Sort transactions by date, amount, or merchant
@@ -110,8 +110,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | CHRT-02 | Phase 2 | Complete |
 | CHRT-03 | Phase 2 | Complete |
 | CHRT-04 | Phase 2 | Complete |
-| TXNS-01 | Phase 3 | Pending |
-| TXNS-02 | Phase 3 | Pending |
+| TXNS-01 | Phase 3 | Complete |
+| TXNS-02 | Phase 3 | Complete |
 | TXNS-03 | Phase 3 | Complete |
 | TXNS-04 | Phase 3 | Complete |
 | TXNS-05 | Phase 3 | Complete |
