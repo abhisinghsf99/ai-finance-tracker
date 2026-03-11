@@ -29,11 +29,12 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. User can navigate between Dashboard, Transactions, Recurring, and Chat pages via a sidebar that collapses on mobile
   4. User can toggle between dark and light themes, with dark as default and preference surviving page reloads
   5. Supabase data is fetched server-side only -- no service_role key or financial data appears in browser network tab or JS bundle
-**Plans**: TBD
+**Plans:** 3 plans
 
 Plans:
-- [ ] 01-01: TBD
-- [ ] 01-02: TBD
+- [ ] 01-01-PLAN.md — Scaffold Next.js 15, generate design system, configure teal/cyan theme with Satoshi font, Supabase server client, test infrastructure
+- [ ] 01-02-PLAN.md — Middleware auth gate, password validation API route, login page with FinTrack branding and shake animation
+- [ ] 01-03-PLAN.md — Sidebar navigation, mobile bottom tab bar, theme toggle, app layout shell, placeholder pages
 
 ### Phase 2: Dashboard and Transactions
 **Goal**: User can see their complete financial picture at a glance and browse/search all transactions
@@ -87,7 +88,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Foundation and Auth | 0/0 | Not started | - |
+| 1. Foundation and Auth | 0/3 | Planning complete | - |
 | 2. Dashboard and Transactions | 0/0 | Not started | - |
 | 3. Recurring and Chat | 0/0 | Not started | - |
 | 4. Deployment and Polish | 0/0 | Not started | - |
