@@ -60,11 +60,12 @@ Plans:
   2. User can search transactions by merchant name, filter by date range / category / amount range / account, and sort by date / amount / merchant
   3. User sees a collapsible recurring charges panel (default collapsed showing monthly total) with each entry showing merchant name, amount, frequency, last charge date, and charge count
   4. Recurring detection correctly groups transactions by merchant + rounded amount with at least 3 occurrences and infers frequency
-**Plans**: TBD
+**Plans**: 3 plans
 
 Plans:
-- [ ] 03-01: TBD
-- [ ] 03-02: TBD
+- [ ] 03-01-PLAN.md -- Utility layer: shadcn component installs, transaction filter/sort pipeline, recurring detection algorithm, query extension for account names
+- [ ] 03-02-PLAN.md -- Transaction panel: collapsible panel with search/filter/sort toolbar, transaction rows, filter popover, load-more
+- [ ] 03-03-PLAN.md -- Recurring panel and page wiring: recurring charges panel, wire both panels into dashboard page.tsx
 
 ### Phase 4: Chat System
 **Goal**: Users can ask natural language questions about their finances and get conversational answers powered by live database queries
@@ -90,5 +91,5 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4
 |-------|----------------|--------|-----------|
 | 1. Foundation and Layout | 3/3 | Complete   | 2026-03-11 |
 | 2. Dashboard Visuals | 1/2 | In Progress|  |
-| 3. Interactive Panels | 0/2 | Not started | - |
+| 3. Interactive Panels | 0/3 | Not started | - |
 | 4. Chat System | 0/2 | Not started | - |
