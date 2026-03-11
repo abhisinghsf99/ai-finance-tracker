@@ -9,11 +9,11 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Foundation
 
-- [ ] **FOUND-01**: Project initializes with Next.js App Router, TypeScript, Tailwind CSS, shadcn/ui
-- [ ] **FOUND-02**: Password-protected login with 30-day session cookie and sign out
-- [ ] **FOUND-03**: All Supabase reads go through server-side service_role key (no anon key in browser)
-- [ ] **FOUND-04**: Typed query layer in lib/queries/ with Plaid amount convention utilities
-- [ ] **FOUND-05**: Dark theme only with teal/cyan accent, Copilot-style aesthetic, neo-grotesque font
+- [x] **FOUND-01**: Project initializes with Next.js App Router, TypeScript, Tailwind CSS, shadcn/ui
+- [x] **FOUND-02**: Password-protected login with 30-day session cookie and sign out
+- [x] **FOUND-03**: All Supabase reads go through server-side service_role key (no anon key in browser)
+- [x] **FOUND-04**: Typed query layer in lib/queries/ with Plaid amount convention utilities
+- [x] **FOUND-05**: Dark theme only with teal/cyan accent, Copilot-style aesthetic, neo-grotesque font
 
 ### Dashboard Overview
 
@@ -93,11 +93,11 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| FOUND-01 | Phase 1 | Pending |
-| FOUND-02 | Phase 1 | Pending |
-| FOUND-03 | Phase 1 | Pending |
-| FOUND-04 | Phase 1 | Pending |
-| FOUND-05 | Phase 1 | Pending |
+| FOUND-01 | Phase 1 | Complete |
+| FOUND-02 | Phase 1 | Complete |
+| FOUND-03 | Phase 1 | Complete |
+| FOUND-04 | Phase 1 | Complete |
+| FOUND-05 | Phase 1 | Complete |
 | LAYO-01 | Phase 1 | Pending |
 | LAYO-02 | Phase 1 | Pending |
 | LAYO-03 | Phase 1 | Pending |
