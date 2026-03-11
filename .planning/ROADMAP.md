@@ -28,12 +28,12 @@ Decimal phases appear between their surrounding integers in numeric order.
   2. After logging in, user sees a dark-themed single-page layout with top nav (logo + sign out) and the session persists for 30 days
   3. On mobile, the layout shows a compact top nav and bottom tab bar for section navigation
   4. The typed query layer exists in lib/queries/ and Plaid amount utilities exist in lib/plaid-amounts.ts (developer-verifiable, not user-facing)
-**Plans**: TBD
+**Plans**: 3 plans
 
 Plans:
-- [ ] 01-01: TBD
-- [ ] 01-02: TBD
-- [ ] 01-03: TBD
+- [ ] 01-01-PLAN.md -- Foundation code: sign-out endpoint, dark theme hardcoding, typed query layer, Plaid amount utilities
+- [ ] 01-02-PLAN.md -- Layout restructuring: top nav, single-page sections, mobile bottom tab bar with anchor navigation
+- [ ] 01-03-PLAN.md -- Vercel deployment and end-to-end verification
 
 ### Phase 2: Dashboard Visuals
 **Goal**: Users see their real financial data at a glance -- spending summaries, account balances, and spending charts with category breakdown
@@ -89,7 +89,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Foundation and Layout | 0/3 | Not started | - |
+| 1. Foundation and Layout | 0/3 | Planning complete | - |
 | 2. Dashboard Visuals | 0/3 | Not started | - |
 | 3. Interactive Panels | 0/2 | Not started | - |
 | 4. Chat System | 0/2 | Not started | - |
