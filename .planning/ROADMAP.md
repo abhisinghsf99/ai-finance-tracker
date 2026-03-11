@@ -1,8 +1,8 @@
-# Roadmap: FinTrack Frontend Dashboard
+# Roadmap: FinTrack
 
 ## Overview
 
-FinTrack is a read-only frontend dashboard over an existing Plaid + Supabase backend. The build progresses through four phases: scaffolding the project with auth and layout (Phase 1), building the two data-heavy pages -- dashboard and transactions (Phase 2), adding recurring detection and the AI chat interface (Phase 3), and deploying to Vercel with final polish (Phase 4). Each phase delivers a complete, verifiable capability and unblocks the next.
+FinTrack builds a personal finance dashboard frontend on top of an existing Supabase + Plaid backend. The roadmap moves from foundation (auth, data layer, layout shell, deployment) through visual dashboard sections (summary cards, account cards, charts) to interactive panels (transactions, recurring detection) and finally the AI chat differentiator (Claude + MCP). Each phase delivers a complete, verifiable capability against real bank data.
 
 ## Phases
 
@@ -12,40 +12,39 @@ FinTrack is a read-only frontend dashboard over an existing Plaid + Supabase bac
 
 Decimal phases appear between their surrounding integers in numeric order.
 
-- [ ] **Phase 1: Foundation and Auth** - Project scaffolding, password gate, layout shell, dark/light theme, Supabase server client
-- [ ] **Phase 2: Dashboard and Transactions** - Account balances, spending charts, category breakdown, suspicious flags, transaction browser with search/filters
-- [ ] **Phase 3: Recurring and Chat** - Auto-detected recurring charges and natural language financial queries via Claude + MCP
-- [ ] **Phase 4: Deployment and Polish** - Vercel production deployment, mobile responsiveness validation, final polish
+- [ ] **Phase 1: Foundation and Layout** - Auth gate, typed data layer, dark theme, page layout shell, and Vercel deployment
+- [ ] **Phase 2: Dashboard Visuals** - Summary cards, account cards, spending trend chart, and category donut chart
+- [ ] **Phase 3: Interactive Panels** - Transaction list with search/filter/sort and recurring charge detection panel
+- [ ] **Phase 4: Chat System** - Floating chat drawer with Claude + MCP for natural language financial queries
 
 ## Phase Details
 
-### Phase 1: Foundation and Auth
-**Goal**: User can access a password-protected app with sidebar navigation and dark/light theme support
+### Phase 1: Foundation and Layout
+**Goal**: Users see a secure, dark-themed login page that gates a single-page dashboard shell deployed to Vercel, with all data infrastructure ready for dashboard components
 **Depends on**: Nothing (first phase)
-**Requirements**: FOUND-01, FOUND-02, FOUND-03, FOUND-04, FOUND-05
+**Requirements**: FOUND-01, FOUND-02, FOUND-03, FOUND-04, FOUND-05, LAYO-01, LAYO-02, LAYO-03, LAYO-04
 **Success Criteria** (what must be TRUE):
-  1. User is redirected to a login page when visiting any route without a valid session
-  2. User can enter a password and gain access to the app, with session persisting across browser refreshes
-  3. User can navigate between Dashboard, Transactions, Recurring, and Chat pages via a sidebar that collapses on mobile
-  4. User can toggle between dark and light themes, with dark as default and preference surviving page reloads
-  5. Supabase data is fetched server-side only -- no service_role key or financial data appears in browser network tab or JS bundle
-**Plans:** 3 plans
+  1. User visits the app URL on Vercel, sees a login page, and cannot access the dashboard without the correct password
+  2. After logging in, user sees a dark-themed single-page layout with top nav (logo + sign out) and the session persists for 30 days
+  3. On mobile, the layout shows a compact top nav and bottom tab bar for section navigation
+  4. The typed query layer exists in lib/queries/ and Plaid amount utilities exist in lib/plaid-amounts.ts (developer-verifiable, not user-facing)
+**Plans**: TBD
 
 Plans:
-- [ ] 01-01-PLAN.md — Scaffold Next.js 15, generate design system, configure teal/cyan theme with Satoshi font, Supabase server client, test infrastructure
-- [ ] 01-02-PLAN.md — Middleware auth gate, password validation API route, login page with FinTrack branding and shake animation
-- [ ] 01-03-PLAN.md — Sidebar navigation, mobile bottom tab bar, theme toggle, app layout shell, placeholder pages
+- [ ] 01-01: TBD
+- [ ] 01-02: TBD
+- [ ] 01-03: TBD
 
-### Phase 2: Dashboard and Transactions
-**Goal**: User can see their complete financial picture at a glance and browse/search all transactions
+### Phase 2: Dashboard Visuals
+**Goal**: Users see their real financial data at a glance -- spending summaries, account balances, and spending charts with category breakdown
 **Depends on**: Phase 1
-**Requirements**: DASH-01, DASH-02, DASH-03, DASH-04, DASH-05, DASH-06, TXNS-01, TXNS-02
+**Requirements**: DASH-01, DASH-02, DASH-03, DASH-04, CHRT-01, CHRT-02, CHRT-03, CHRT-04
 **Success Criteria** (what must be TRUE):
-  1. User can see individual account cards with current balance, account type, and institution name on the dashboard
-  2. User can see a net position card (total cash minus total credit minus total loans) and credit utilization bars for each credit card
-  3. User can see a category breakdown chart for spending in the last 2 weeks and a list of recent transactions (last 30 days)
-  4. User sees automated flags on unusually large transactions, new merchants above threshold, or duplicate charges
-  5. User can search transactions by merchant name or description, and filter by date range, category, account, and amount range
+  1. User sees current month spending total, last month total with percentage change, and transaction count in summary cards
+  2. User sees each linked account with name, last 4 digits, balance, and type; plus a net position card and credit utilization bars color-coded green/amber/red
+  3. User sees a 6-month spending trend bar chart and can hover any bar to see the exact amount
+  4. User sees a category donut chart for current month spending and can click any category to see its transactions
+  5. All charts render correctly with muted harmonious palette and 10+ distinct category colors on both desktop and mobile
 **Plans**: TBD
 
 Plans:
@@ -53,42 +52,44 @@ Plans:
 - [ ] 02-02: TBD
 - [ ] 02-03: TBD
 
-### Phase 3: Recurring and Chat
-**Goal**: User can review recurring charges and ask natural language financial questions answered by Claude
+### Phase 3: Interactive Panels
+**Goal**: Users can explore their full transaction history with search and filters, and see automatically detected recurring charges
 **Depends on**: Phase 2
-**Requirements**: RECR-01, RECR-02, CHAT-01, CHAT-02, CHAT-03
+**Requirements**: TXNS-01, TXNS-02, TXNS-03, TXNS-04, TXNS-05, RECR-01, RECR-02, RECR-03
 **Success Criteria** (what must be TRUE):
-  1. User can see auto-detected recurring charges with merchant name, amount, frequency (weekly/monthly/quarterly), and last charge date
-  2. User can see an estimated monthly recurring total at the top of the recurring page
-  3. User can type a natural language financial question and receive a streaming response from Claude that queries their actual financial data
-  4. User sees a chat interface with message bubbles, a loading indicator during responses, and smart suggestion chips based on recent queries
+  1. User sees a collapsible transactions panel (default collapsed showing count) that expands to show merchant name, amount, category, date, and account for each transaction
+  2. User can search transactions by merchant name, filter by date range / category / amount range / account, and sort by date / amount / merchant
+  3. User sees a collapsible recurring charges panel (default collapsed showing monthly total) with each entry showing merchant name, amount, frequency, last charge date, and charge count
+  4. Recurring detection correctly groups transactions by merchant + rounded amount with at least 3 occurrences and infers frequency
 **Plans**: TBD
 
 Plans:
 - [ ] 03-01: TBD
 - [ ] 03-02: TBD
 
-### Phase 4: Deployment and Polish
-**Goal**: App is live on Vercel and works correctly across devices
+### Phase 4: Chat System
+**Goal**: Users can ask natural language questions about their finances and get conversational answers powered by live database queries
 **Depends on**: Phase 3
-**Requirements**: DEPL-01, DEPL-02
+**Requirements**: CHAT-01, CHAT-02, CHAT-03, CHAT-04, CHAT-05
 **Success Criteria** (what must be TRUE):
-  1. App is deployed to Vercel with all environment variables configured and accessible at production URL
-  2. All pages render correctly and are usable on both mobile and desktop browsers
-  3. Auth gate, data loading, and chat streaming all function correctly in production (not just local dev)
+  1. User sees a floating chat button (bottom-right) that opens a chat drawer with suggestion chips for common queries
+  2. User can type a financial question and receive a streaming conversational response with user/assistant message bubbles and a loading indicator
+  3. Claude generates and executes SQL via the MCP server's execute_query tool and returns a human-readable answer (not raw SQL or JSON)
+  4. Chat works correctly on Vercel deployment without streaming timeouts for typical queries
 **Plans**: TBD
 
 Plans:
 - [ ] 04-01: TBD
+- [ ] 04-02: TBD
 
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 → 2 → 3 → 4
+Phases execute in numeric order: 1 -> 2 -> 3 -> 4
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Foundation and Auth | 0/3 | Planning complete | - |
-| 2. Dashboard and Transactions | 0/0 | Not started | - |
-| 3. Recurring and Chat | 0/0 | Not started | - |
-| 4. Deployment and Polish | 0/0 | Not started | - |
+| 1. Foundation and Layout | 0/3 | Not started | - |
+| 2. Dashboard Visuals | 0/3 | Not started | - |
+| 3. Interactive Panels | 0/2 | Not started | - |
+| 4. Chat System | 0/2 | Not started | - |
