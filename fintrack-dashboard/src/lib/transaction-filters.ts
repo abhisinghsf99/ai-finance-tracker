@@ -28,7 +28,7 @@ function isZelle(t: Transaction): boolean {
  * - Remove payment categories (TRANSFER_OUT, LOAN_PAYMENTS, TRANSFER_IN)
  *   EXCEPT Zelle transfers
  */
-export function applyBaseFilter(transactions: Transaction[]): Transaction[] {
+export function applyBaseFilter<T extends Transaction>(transactions: T[]): T[] {
   return transactions.filter((t) => {
     // Hide deposits/income (negative amount = money entering account)
     if (t.amount < 0) return false
@@ -46,10 +46,10 @@ export function applyBaseFilter(transactions: Transaction[]): Transaction[] {
  * Search by merchant_name or name fields, case-insensitive.
  * Returns all transactions if term is empty or whitespace.
  */
-export function searchTransactions(
-  transactions: Transaction[],
+export function searchTransactions<T extends Transaction>(
+  transactions: T[],
   term: string
-): Transaction[] {
+): T[] {
   const trimmed = term.trim()
   if (!trimmed) return transactions
 
@@ -66,10 +66,10 @@ export function searchTransactions(
  * Date comparison uses string comparison (ISO format).
  * Amount range checks absolute values.
  */
-export function filterTransactions(
-  transactions: Transaction[],
+export function filterTransactions<T extends Transaction>(
+  transactions: T[],
   filters: TransactionFilters
-): Transaction[] {
+): T[] {
   return transactions.filter((t) => {
     if (filters.dateRange) {
       if (t.date < filters.dateRange.start || t.date > filters.dateRange.end) {
@@ -101,10 +101,10 @@ export function filterTransactions(
  * Sort transactions by the given option. Returns a new array (does not mutate).
  * Merchant sort uses merchant_name ?? name ?? "" for comparison.
  */
-export function sortTransactions(
-  transactions: Transaction[],
+export function sortTransactions<T extends Transaction>(
+  transactions: T[],
   sort: SortOption
-): Transaction[] {
+): T[] {
   const sorted = [...transactions]
 
   switch (sort) {

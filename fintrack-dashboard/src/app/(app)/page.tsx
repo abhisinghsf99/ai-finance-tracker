@@ -4,11 +4,14 @@ import { SummaryCards } from "@/components/dashboard/summary-cards"
 import { NetPositionCard } from "@/components/dashboard/net-position-card"
 import { AccountCards } from "@/components/dashboard/account-cards"
 import { ChartsSection } from "@/components/dashboard/charts-section"
+import { TransactionsPanel } from "@/components/dashboard/transactions-panel"
+import { RecurringPanel } from "@/components/dashboard/recurring-panel"
 import {
   getTrailingMonthlySpending,
   getCategorySpending,
-  getTransactions,
+  getTransactionsWithAccounts,
 } from "@/lib/queries/transactions"
+import { getAccounts } from "@/lib/queries/accounts"
 
 export const dynamic = "force-dynamic"
 
@@ -20,12 +23,18 @@ function getCurrentYearMonth(): string {
 export default async function DashboardPage() {
   const yearMonth = getCurrentYearMonth()
 
-  const [monthlySpending, categorySpending, recentTransactions] =
+  const [monthlySpending, categorySpending, transactionsWithAccounts, accounts] =
     await Promise.all([
       getTrailingMonthlySpending(),
       getCategorySpending(yearMonth),
-      getTransactions({ limit: 500 }),
+      getTransactionsWithAccounts({ limit: 500 }),
+      getAccounts(),
     ])
+
+  const accountsList = accounts.map((a) => ({
+    id: a.id,
+    name: a.name || a.official_name || "Account",
+  }))
 
   return (
     <div className="space-y-8">
@@ -72,14 +81,23 @@ export default async function DashboardPage() {
           monthlySpending={monthlySpending}
           categorySpending={categorySpending}
           yearMonth={yearMonth}
-          transactions={recentTransactions}
+          transactions={transactionsWithAccounts}
         />
       </section>
 
-      {/* Transactions Placeholder */}
+      {/* Transactions Section */}
       <section id="transactions" className="scroll-mt-16">
         <h2 className="text-xl font-semibold mb-4">Transactions</h2>
-        <p className="text-muted-foreground">Coming in Phase 3</p>
+        <TransactionsPanel
+          transactions={transactionsWithAccounts}
+          accounts={accountsList}
+        />
+      </section>
+
+      {/* Recurring Section */}
+      <section id="recurring" className="scroll-mt-16">
+        <h2 className="text-xl font-semibold mb-4">Recurring Charges</h2>
+        <RecurringPanel transactions={transactionsWithAccounts} />
       </section>
 
       {/* Chat Placeholder */}
