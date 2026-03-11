@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 01-01-PLAN.md
-last_updated: "2026-03-11T01:59:20Z"
-last_activity: 2026-03-11 -- Completed plan 01-01 (project scaffold)
+stopped_at: Completed 01-02-PLAN.md
+last_updated: "2026-03-11T02:06:08.470Z"
+last_activity: 2026-03-11 -- Completed plan 01-02 (auth gate and login page)
 progress:
   total_phases: 4
   completed_phases: 0
   total_plans: 3
-  completed_plans: 1
-  percent: 8
+  completed_plans: 2
+  percent: 67
 ---
 
 # Project State
@@ -26,28 +26,28 @@ See: .planning/PROJECT.md (updated 2026-03-10)
 ## Current Position
 
 Phase: 1 of 4 (Foundation and Auth)
-Plan: 2 of 3 in current phase
+Plan: 3 of 3 in current phase
 Status: Executing
-Last activity: 2026-03-11 -- Completed plan 01-01 (project scaffold)
+Last activity: 2026-03-11 -- Completed plan 01-02 (auth gate and login page)
 
-Progress: [█░░░░░░░░░] 8%
+Progress: [███████░░░] 67%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 1
-- Average duration: 6 min
-- Total execution time: 0.1 hours
+- Total plans completed: 2
+- Average duration: 5 min
+- Total execution time: 0.2 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| 01-foundation-and-auth | 1/3 | 6 min | 6 min |
+| 01-foundation-and-auth | 2/3 | 10 min | 5 min |
 
 **Recent Trend:**
-- Last 5 plans: 01-01 (6 min)
-- Trend: Starting
+- Last 5 plans: 01-01 (6 min), 01-02 (4 min)
+- Trend: Accelerating
 
 *Updated after each plan completion*
 
@@ -63,6 +63,9 @@ Recent decisions affecting current work:
 - [01-01]: Used Satoshi Variable font (single woff2) instead of 3 separate weight files
 - [01-01]: Used hsl() color values instead of oklch() for teal/cyan theme to match RESEARCH.md spec
 - [01-01]: Installed next-themes explicitly since shadcn/ui v4.0.3 did not auto-install it
+- [01-02]: Cookie existence check only in middleware (no value validation) -- single-user personal app
+- [01-02]: crypto.randomUUID() for session token instead of HMAC -- sufficient for personal app
+- [01-02]: Shake animation via Tailwind 4 @theme inline custom animation variable
 
 ### Pending Todos
 
@@ -75,6 +78,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-11T01:59:20Z
-Stopped at: Completed 01-01-PLAN.md
-Resume file: .planning/phases/01-foundation-and-auth/01-02-PLAN.md
+Last session: 2026-03-11T02:06:08.468Z
+Stopped at: Completed 01-02-PLAN.md
+Resume file: .planning/phases/01-foundation-and-auth/01-03-PLAN.md
