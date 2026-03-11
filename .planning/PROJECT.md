@@ -1,74 +1,90 @@
-# FinTrack — Frontend Dashboard
+# FinTrack
 
 ## What This Is
 
-A personal fintech dashboard web app that visualizes spending data from an existing Plaid-powered backend. Four pages — Dashboard (overview with charts), Transactions (browsable/filterable list), Recurring (auto-detected subscriptions), and Chat (natural language financial queries via Claude + MCP). Deployed to Vercel, accessible from any device, dark/light themed.
+FinTrack is a personal financial dashboard web app that visualizes spending data from real bank accounts (via Plaid) and provides a natural language chat interface for financial queries (via Claude + MCP). The backend is already built — Plaid ingests real bank data into Supabase via a DigitalOcean VPS webhook receiver, and a remote MCP server enables conversational SQL queries. This project builds the frontend: a single-page scrollable dashboard deployed to Vercel.
 
 ## Core Value
 
-At-a-glance financial visibility — see balances, spending trends, and category breakdowns without asking Claude a question every time.
+At-a-glance visibility into personal finances — account balances, spending trends, categorized transactions, and recurring charges — all on one dark-themed page with a chat interface for ad-hoc financial questions.
 
 ## Requirements
 
 ### Validated
 
-- ✓ Bank account linking via Plaid — existing (`link-account/`)
-- ✓ Real-time transaction sync via webhooks — existing (`webhook/`)
-- ✓ MCP server with execute_query + get_schema — existing (`mcp-server/`)
+- ✓ Plaid webhook receiver on DigitalOcean VPS — existing
 - ✓ Supabase database with institutions, accounts, transactions, sync_log tables — existing
-- ✓ Webhook signature verification (JWT + SHA-256) — existing
-- ✓ Cursor-based pagination for transaction sync — existing
+- ✓ MCP server (local + remote) with execute_query and get_schema tools — existing
+- ✓ RLS enabled, service_role key only access — existing
 
 ### Active
 
-- [ ] Visual dashboard with summary cards, account balances, spending charts
-- [ ] Transaction browser with search, filters, sorting, pagination
-- [ ] Recurring charge detection and display
-- [ ] Chat interface powered by Anthropic API + remote MCP server
-- [ ] Dark/light theme toggle (dark default)
-- [ ] Auth gate to protect financial data
-- [ ] Vercel deployment with environment variables
+- [ ] Password-protected login with 30-day session
+- [ ] Single-page scrollable dashboard with all financial sections
+- [ ] Summary cards: current month spending, last month with % change, transaction count
+- [ ] Account balance cards with net position and credit utilization bars
+- [ ] Monthly spending trend bar chart (trailing 6 months)
+- [ ] Spending by category donut chart with drill-down
+- [ ] Recent transactions collapsible panel with search/filter
+- [ ] Recurring charges collapsible panel with auto-detection
+- [ ] Chat interface via floating button + drawer (Anthropic API + MCP)
+- [ ] Dark theme only, teal/cyan accent, Copilot-style aesthetic
+- [ ] Mobile-optimized with bottom tab bar for section jumps
+- [ ] Deployed to Vercel
 
 ### Out of Scope
 
-- Multi-user support — personal app, single user
-- Plaid Link in frontend — bank connections managed separately via existing link-account flow
-- Investment or retirement account tracking — consumer credit, lending, checking/savings only
-- Budget setting or goal tracking — potential Phase 3
+- Multi-user support — personal/household use only
+- Light theme / theme toggle — dark only
+- Multi-page routing — single scrollable page
+- Plaid Link flow in frontend — bank connections managed separately
+- Investment/retirement account tracking — consumer credit, lending, checking/savings only
+- Budget setting / goal tracking — potential Phase 3
 - Native mobile app — PWA covers mobile access
-- Phase 2 features (push notifications, anomaly detection, category management) — documented in project plan Section 11
+- Anomaly detection / alert rules engine — Phase 2 post-MVP
+- PWA push notifications — Phase 2 post-MVP
+- Transaction category management — Phase 2 post-MVP
 
 ## Context
 
-**Existing backend:** Fully operational Plaid → VPS webhook → Supabase pipeline. MCP server deployed at claudefinancetracker.xyz/mcp (authless, read-only). Currently connected: 1 institution (US Bank) with 2 checking accounts, 2 credit cards, 1 auto loan.
+### Existing Backend
+- **Database:** Supabase (Postgres) with 4 tables: institutions, accounts, transactions, sync_log
+- **Data flow:** Plaid webhook → VPS → Supabase. Frontend reads only.
+- **MCP server:** Remote at claudefinancetracker.xyz/mcp (authless), execute_query + get_schema
+- **Connected institutions:** 1 (US Bank) — 2 checking, 2 credit cards, 1 auto loan
+- **Future institutions:** Amex, Wells Fargo, Chase, Capital One, Bank of America
 
-**Data model:** 4 tables — institutions, accounts, transactions, sync_log. Transactions have Plaid categories (category_primary, category_detailed), merchant info, amounts (positive = spending, negative = income/refunds per Plaid convention), and raw_data JSONB for future-proofing.
+### Data Conventions
+- Plaid amounts: positive = spending/debits, negative = income/refunds
+- RLS enabled on all tables, service_role key required for access
+- Indexes on transactions(date), transactions(merchant_name), transactions(category_primary), etc.
 
-**Frontend reads from Supabase directly** for dashboard/transactions/recurring pages. Chat goes through /api/chat → Anthropic API → remote MCP server → Supabase.
-
-**Design direction:** Clean, modern fintech aesthetic inspired by Copilot, Linear, Arc. Sidebar navigation + main content area. Distinctive typography. Muted chart palette with clear data hierarchy. Design system via UI UX Pro Max skill, screen mockups via Google Stitch MCP.
+### Design Direction
+- Copilot-style aesthetic: warm, approachable fintech with rounded cards, soft gradients
+- Teal/cyan accent color
+- Neo-grotesque typography (Satoshi/General Sans)
+- Charts: muted harmonious palette, 10+ category colors
+- Login: full-bleed gradient background with floating 3D-style card
 
 ## Constraints
 
-- **Tech stack**: Next.js 14 (App Router), TypeScript, Tailwind CSS + shadcn/ui, Recharts, supabase-js, Anthropic SDK — decided in project plan
-- **Deployment**: Vercel free tier — must work within limits
-- **Database access**: Read-only from frontend; RLS policies needed for anon key access on accounts/transactions tables (or server-side API routes with service_role key)
-- **Auth**: TBD approach — options: simple password gate, NextAuth with single email, or Vercel password protection
-- **Cost**: Minimal — Supabase free tier, Vercel free tier, Anthropic API pay-per-use
-- **Design tooling**: Stitch MCP + UI UX Pro Max skill + Nano Banana 2 for screen design
+- **Tech stack:** Next.js (App Router), TypeScript, Tailwind CSS, shadcn/ui, Recharts, supabase-js, Anthropic SDK
+- **Deployment:** Vercel (free tier)
+- **Security:** No service_role key in browser. Dashboard reads via server-side or anon key with RLS. Chat API route server-side only.
+- **Auth:** Simple password gate (env var), not Supabase Auth
+- **Theme:** Dark only, no toggle
+- **Layout:** Single scrollable page, no multi-page routing
 
 ## Key Decisions
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| Next.js 14 App Router | Vercel-native, server components, API routes built in | — Pending |
-| supabase-js direct reads | Already have the project, simplest path for read-only dashboard data | — Pending |
-| Anthropic SDK for chat (not MCP client) | Server-side API route, Claude calls MCP tools internally | — Pending |
-| Recharts for charts | Clean API, good financial chart defaults, React-native | — Pending |
-| shadcn/ui components | Accessible, customizable, Tailwind-native | — Pending |
-| Dark theme default | Fintech dashboard convention, easier on eyes for financial data | — Pending |
-| Auth approach | TBD — needs discussion during phase planning | — Pending |
-| RLS vs server-side routes | TBD — security vs simplicity tradeoff | — Pending |
+| Single page over multi-page routing | All financial data visible by scrolling, collapsible panels for density | — Pending |
+| Password gate over Supabase Auth | Single user, personal app, simplest possible auth | — Pending |
+| Dark theme only | Personal preference, fintech aesthetic, reduces scope | — Pending |
+| Anthropic SDK + MCP for chat | Existing MCP server already works, Claude generates SQL directly | — Pending |
+| supabase-js for dashboard reads | Direct reads from Supabase, RLS policies for anon role | — Pending |
+| Recharts for charts | Clean API, financial chart defaults, React-native | — Pending |
 
 ---
-*Last updated: 2025-03-10 after initialization*
+*Last updated: 2026-03-10 after initialization*
