@@ -1,6 +1,5 @@
 import type { Metadata } from "next"
 import localFont from "next/font/local"
-import { ThemeProvider } from "@/components/theme-provider"
 import "./globals.css"
 
 const satoshi = localFont({
@@ -25,16 +24,9 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="en" className={satoshi.variable} suppressHydrationWarning>
-      <body className="font-sans antialiased">
-        <ThemeProvider
-          attribute="class"
-          defaultTheme="dark"
-          enableSystem
-          disableTransitionOnChange
-        >
-          {children}
-        </ThemeProvider>
+    <html lang="en" className={`${satoshi.variable} dark`}>
+      <body className="font-sans antialiased bg-background text-foreground">
+        {children}
       </body>
     </html>
   )

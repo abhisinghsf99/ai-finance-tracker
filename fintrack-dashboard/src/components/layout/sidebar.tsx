@@ -11,7 +11,7 @@ import {
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Separator } from "@/components/ui/separator"
-import { ThemeToggle } from "@/components/layout/theme-toggle"
+// ThemeToggle removed - dark-only app
 
 interface NavItem {
   href: string
@@ -70,13 +70,9 @@ export function Sidebar({ className }: { className?: string }) {
         ))}
       </nav>
 
-      {/* Spacer + Theme Toggle */}
+      {/* Spacer */}
       <div className="mt-auto">
         <Separator className="mb-4" />
-        <div className="flex items-center justify-between px-3">
-          <span className="text-xs text-muted-foreground">Theme</span>
-          <ThemeToggle />
-        </div>
       </div>
     </aside>
   )
