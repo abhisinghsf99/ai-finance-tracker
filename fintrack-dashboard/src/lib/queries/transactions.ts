@@ -1,6 +1,18 @@
 import { createServerSupabase } from "@/lib/supabase/server"
 import type { Transaction } from "./types"
 
+interface MonthlySpendingEntry {
+  month: string
+  total: number
+  count: number
+}
+
+interface CategorySpendingEntry {
+  category: string
+  total: number
+  count: number
+}
+
 export async function getTransactions(
   options?: { limit?: number; offset?: number }
 ): Promise<Transaction[]> {
@@ -39,4 +51,96 @@ export async function getMonthlySpending(
     total: spending,
     count: (data as { amount: number }[]).filter((t) => t.amount > 0).length,
   }
+}
+
+/**
+ * Fetches spending totals for the trailing N months (oldest first).
+ * Uses parallel fetching via Promise.all for performance.
+ */
+export async function getTrailingMonthlySpending(
+  months = 6
+): Promise<MonthlySpendingEntry[]> {
+  const now = new Date()
+  const monthNames = [
+    "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+  ]
+
+  const promises = Array.from({ length: months }, (_, i) => {
+    const d = new Date(now.getFullYear(), now.getMonth() - (months - 1 - i), 1)
+    const yearMonth = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`
+    const label = monthNames[d.getMonth()]
+    return getMonthlySpending(yearMonth).then((result) => ({
+      month: label,
+      total: result.total,
+      count: result.count,
+    }))
+  })
+
+  return Promise.all(promises)
+}
+
+/**
+ * Groups spending transactions for a given month by category_primary.
+ * Returns sorted by total descending. Null categories become "OTHER".
+ */
+export async function getCategorySpending(
+  yearMonth: string
+): Promise<CategorySpendingEntry[]> {
+  const supabase = createServerSupabase()
+  const { data, error } = await supabase
+    .from("transactions")
+    .select("amount, category_primary")
+    .like("date", `${yearMonth}%`)
+
+  if (error)
+    throw new Error(`Failed to fetch category spending: ${error.message}`)
+
+  const rows = data as { amount: number; category_primary: string | null }[]
+  const spending = rows.filter((t) => t.amount > 0)
+
+  const map = new Map<string, { total: number; count: number }>()
+  for (const t of spending) {
+    const cat = t.category_primary ?? "OTHER"
+    const entry = map.get(cat) ?? { total: 0, count: 0 }
+    entry.total += t.amount
+    entry.count += 1
+    map.set(cat, entry)
+  }
+
+  return Array.from(map.entries())
+    .map(([category, { total, count }]) => ({ category, total, count }))
+    .sort((a, b) => b.total - a.total)
+}
+
+/**
+ * Fetches spending transactions for a specific month and category.
+ * Ordered by date descending.
+ */
+export async function getTransactionsByCategory(
+  yearMonth: string,
+  category: string
+): Promise<Transaction[]> {
+  const supabase = createServerSupabase()
+
+  let query = supabase
+    .from("transactions")
+    .select("*")
+    .like("date", `${yearMonth}%`)
+    .gt("amount", 0)
+    .order("date", { ascending: false })
+
+  if (category === "OTHER") {
+    query = query.is("category_primary", null)
+  } else {
+    query = query.eq("category_primary", category)
+  }
+
+  const { data, error } = await query
+
+  if (error)
+    throw new Error(
+      `Failed to fetch transactions by category: ${error.message}`
+    )
+  return data as Transaction[]
 }
