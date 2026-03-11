@@ -1,6 +1,10 @@
 import { createServerSupabase } from "@/lib/supabase/server"
 import type { Transaction } from "./types"
 
+export type TransactionWithAccount = Transaction & {
+  account_name: string
+}
+
 interface MonthlySpendingEntry {
   month: string
   total: number
@@ -143,4 +147,38 @@ export async function getTransactionsByCategory(
       `Failed to fetch transactions by category: ${error.message}`
     )
   return data as Transaction[]
+}
+
+/**
+ * Fetches transactions with joined account name.
+ * Uses Supabase relation join to get account.name in a single query.
+ */
+export async function getTransactionsWithAccounts(
+  options?: { limit?: number; offset?: number }
+): Promise<TransactionWithAccount[]> {
+  const limit = options?.limit ?? 500
+  const offset = options?.offset ?? 0
+
+  const supabase = createServerSupabase()
+  const { data, error } = await supabase
+    .from("transactions")
+    .select("*, accounts(name)")
+    .order("date", { ascending: false })
+    .range(offset, offset + limit - 1)
+
+  if (error)
+    throw new Error(
+      `Failed to fetch transactions with accounts: ${error.message}`
+    )
+
+  // Flatten the joined account name into a top-level field
+  return (data as (Transaction & { accounts: { name: string | null } | null })[]).map(
+    (row) => {
+      const { accounts: accountData, ...txn } = row
+      return {
+        ...txn,
+        account_name: accountData?.name ?? "Unknown Account",
+      } as TransactionWithAccount
+    }
+  )
 }
