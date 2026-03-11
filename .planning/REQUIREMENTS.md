@@ -17,10 +17,10 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Dashboard Overview
 
-- [ ] **DASH-01**: Summary cards showing current month spending, last month with % change, and transaction count
-- [ ] **DASH-02**: Individual account cards with name, last 4 digits, balance, and account type
-- [ ] **DASH-03**: Net position card showing total cash minus total credit minus total loans
-- [ ] **DASH-04**: Credit utilization bars for each credit card with color coding (green/amber/red)
+- [x] **DASH-01**: Summary cards showing current month spending, last month with % change, and transaction count
+- [x] **DASH-02**: Individual account cards with name, last 4 digits, balance, and account type
+- [x] **DASH-03**: Net position card showing total cash minus total credit minus total loans
+- [x] **DASH-04**: Credit utilization bars for each credit card with color coding (green/amber/red)
 
 ### Charts
 
@@ -102,10 +102,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 | LAYO-02 | Phase 1 | Complete |
 | LAYO-03 | Phase 1 | Complete |
 | LAYO-04 | Phase 1 | Complete |
-| DASH-01 | Phase 2 | Pending |
-| DASH-02 | Phase 2 | Pending |
-| DASH-03 | Phase 2 | Pending |
-| DASH-04 | Phase 2 | Pending |
+| DASH-01 | Phase 2 | Complete |
+| DASH-02 | Phase 2 | Complete |
+| DASH-03 | Phase 2 | Complete |
+| DASH-04 | Phase 2 | Complete |
 | CHRT-01 | Phase 2 | Pending |
 | CHRT-02 | Phase 2 | Pending |
 | CHRT-03 | Phase 2 | Pending |
