@@ -28,7 +28,7 @@ function prettifyCategory(category: string): string {
 
 export default function CategoryChart({
   data,
-  yearMonth,
+  yearMonth: _yearMonth,
   transactions,
 }: CategoryChartProps) {
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null)
