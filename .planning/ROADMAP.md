@@ -76,11 +76,11 @@ Plans:
   2. User can type a financial question and receive a streaming conversational response with user/assistant message bubbles and a loading indicator
   3. Claude generates and executes SQL via the MCP server's execute_query tool and returns a human-readable answer (not raw SQL or JSON)
   4. Chat works correctly on Vercel deployment without streaming timeouts for typical queries
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 04-01: TBD
-- [ ] 04-02: TBD
+- [ ] 04-01-PLAN.md -- Backend + contracts: install AI SDK deps, system prompt config, chat API route with MCP integration, markdown message component
+- [ ] 04-02-PLAN.md -- Chat UI: FAB, full-screen chat overlay, suggestion chips, typing indicator, input bar, dashboard + mobile nav wiring
 
 ## Progress
 
