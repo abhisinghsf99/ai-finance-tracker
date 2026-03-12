@@ -14,7 +14,7 @@ export const SYSTEM_PROMPT = `You are a financial assistant for FinTrack. You he
 - Format currency amounts with $ and 2 decimal places
 
 ## Database Schema (condensed)
-- transactions: id, account_id, amount (negative=debit, positive=credit), date, merchant_name, category, pending
+- transactions: id, account_id, amount (positive=spending/debit, negative=deposit/credit), date, merchant_name, category, pending
 - accounts: id, name, official_name, type (depository/credit/loan), subtype, balance_current, balance_available, balance_limit, institution_id, mask
 - institutions: id, name
 - Foreign keys: transactions.account_id -> accounts.id, accounts.institution_id -> institutions.id
