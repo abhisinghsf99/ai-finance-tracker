@@ -33,6 +33,22 @@ export function MobileNav({ className }: { className?: string }) {
       <div className="flex items-center justify-around px-2 pb-[env(safe-area-inset-bottom,0px)] pt-2">
         {navItems.map((item) => {
           const Icon = item.icon
+
+          // Chat tab dispatches custom event instead of anchor scroll
+          if (item.href === "#chat") {
+            return (
+              <button
+                key={item.href}
+                type="button"
+                onClick={() => window.dispatchEvent(new CustomEvent("open-chat"))}
+                className="flex flex-col items-center gap-0.5 px-3 py-1.5 text-muted-foreground transition-colors duration-200 hover:text-primary cursor-pointer"
+              >
+                <Icon className="h-5 w-5" />
+                <span className="text-xs font-medium">{item.label}</span>
+              </button>
+            )
+          }
+
           return (
             <a
               key={item.href}

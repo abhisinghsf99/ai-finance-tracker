@@ -60,7 +60,7 @@ export function ChatView({ onClose }: ChatViewProps) {
         ) : (
           <div className="space-y-1">
             {messages
-              .filter((m) => m.role !== 'tool')
+              .filter((m) => m.role === 'user' || m.role === 'assistant')
               .map((message) => (
                 <ChatMessage key={message.id} message={message} />
               ))}

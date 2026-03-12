@@ -12,6 +12,7 @@ import {
   getTransactionsWithAccounts,
 } from "@/lib/queries/transactions"
 import { getAccounts } from "@/lib/queries/accounts"
+import { ChatFABWrapper } from "@/components/chat/chat-fab-wrapper"
 
 export const dynamic = "force-dynamic"
 
@@ -100,11 +101,11 @@ export default async function DashboardPage() {
         <RecurringPanel transactions={transactionsWithAccounts} />
       </section>
 
-      {/* Chat Placeholder */}
-      <section id="chat" className="scroll-mt-16">
-        <h2 className="text-xl font-semibold mb-4">Chat</h2>
-        <p className="text-muted-foreground">Coming in Phase 4</p>
-      </section>
+      {/* Chat anchor for mobile nav scroll */}
+      <div id="chat" className="scroll-mt-16" />
+
+      {/* Chat FAB - client-side only */}
+      <ChatFABWrapper />
     </div>
   )
 }
