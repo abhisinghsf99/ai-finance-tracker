@@ -48,8 +48,8 @@ Requirements for initial release. Each maps to roadmap phases.
 - [ ] **CHAT-01**: Floating chat button (bottom-right) opens a chat drawer/modal
 - [ ] **CHAT-02**: Chat message area with user/assistant bubbles and loading indicator
 - [ ] **CHAT-03**: Suggestion chips for common queries on empty state
-- [ ] **CHAT-04**: /api/chat route calls Anthropic API with MCP server for SQL queries
-- [ ] **CHAT-05**: Claude generates SQL via execute_query tool and returns conversational response
+- [x] **CHAT-04**: /api/chat route calls Anthropic API with MCP server for SQL queries
+- [x] **CHAT-05**: Claude generates SQL via execute_query tool and returns conversational response
 
 ### Layout & Mobile
 
@@ -121,8 +121,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | CHAT-01 | Phase 4 | Pending |
 | CHAT-02 | Phase 4 | Pending |
 | CHAT-03 | Phase 4 | Pending |
-| CHAT-04 | Phase 4 | Pending |
-| CHAT-05 | Phase 4 | Pending |
+| CHAT-04 | Phase 4 | Complete |
+| CHAT-05 | Phase 4 | Complete |
 
 **Coverage:**
 - v1 requirements: 30 total
