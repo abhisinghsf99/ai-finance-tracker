@@ -100,23 +100,6 @@ export default function CategoryChart({
         </PieChart>
       </ChartContainer>
 
-      {/* Legend */}
-      <div className="flex flex-wrap justify-center gap-x-4 gap-y-2 mt-2">
-        {data.map((entry) => (
-          <button
-            key={entry.category}
-            type="button"
-            className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
-            onClick={() => setSelectedCategory(entry.category)}
-          >
-            <span
-              className="h-2.5 w-2.5 rounded-sm shrink-0"
-              style={{ backgroundColor: getCategoryColor(entry.category) }}
-            />
-            {prettifyCategory(entry.category)}
-          </button>
-        ))}
-      </div>
 
       {/* Drill-down Sheet */}
       <CategoryTransactions

@@ -1,7 +1,9 @@
-import { getAccounts } from "@/lib/queries/accounts"
+"use client"
+
 import { formatCurrency } from "@/lib/plaid-amounts"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Banknote, CreditCard, Landmark } from "lucide-react"
+import { useDashboardStore } from "@/lib/store/dashboard-store"
 import type { Account } from "@/lib/queries/types"
 
 const TYPE_ORDER = ["depository", "credit", "loan"] as const
@@ -45,6 +47,15 @@ function formatSubtype(type: string, subtype: string | null): string {
     .join(" ")
 }
 
+function formatDate(dateStr: string): string {
+  const date = new Date(dateStr + "T00:00:00")
+  return date.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  })
+}
+
 function CreditUtilizationBar({ account }: { account: Account }) {
   const balance = account.balance_current ?? 0
   const limit = account.balance_limit
@@ -78,11 +89,73 @@ function CreditUtilizationBar({ account }: { account: Account }) {
   )
 }
 
+function CreditLiabilityInfo({ accountId }: { accountId: string }) {
+  const { getCreditLiabilityForAccount } = useDashboardStore()
+  const liability = getCreditLiabilityForAccount(accountId)
+
+  if (!liability) return null
+
+  const purchaseApr = liability.aprs.find((a) => a.apr_type === "purchase_apr")
+  const balanceTransferApr = liability.aprs.find(
+    (a) => a.apr_type === "balance_transfer_apr"
+  )
+
+  const hasAnyInfo =
+    purchaseApr ||
+    liability.next_payment_due_date ||
+    liability.minimum_payment_amount != null
+
+  if (!hasAnyInfo) return null
+
+  return (
+    <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-xs border-t border-border/40 pt-3">
+      {purchaseApr && (
+        <div>
+          <p className="text-muted-foreground">Purchase APR</p>
+          <p className="font-medium">{purchaseApr.apr_percentage.toFixed(2)}%</p>
+        </div>
+      )}
+      {liability.next_payment_due_date && (
+        <div>
+          <p className="text-muted-foreground">Next Payment Due</p>
+          <p className="font-medium">
+            {formatDate(liability.next_payment_due_date)}
+          </p>
+        </div>
+      )}
+      {liability.minimum_payment_amount != null && (
+        <div>
+          <p className="text-muted-foreground">Minimum Payment</p>
+          <p className="font-medium">
+            {formatCurrency(liability.minimum_payment_amount)}
+          </p>
+        </div>
+      )}
+      {balanceTransferApr && (
+        <div>
+          <p className="text-muted-foreground">Balance Transfer APR</p>
+          <p className="font-medium">
+            {balanceTransferApr.apr_percentage.toFixed(2)}%
+            {balanceTransferApr.balance_subject_to_apr != null && (
+              <span className="text-muted-foreground ml-1">
+                on {formatCurrency(balanceTransferApr.balance_subject_to_apr)}
+              </span>
+            )}
+          </p>
+        </div>
+      )}
+    </div>
+  )
+}
+
 function AccountCard({ account }: { account: Account }) {
   const config = TYPE_CONFIG[account.type] ?? TYPE_CONFIG.depository
   const Icon = config.icon
   const displayName = account.name ?? account.official_name ?? "Unknown Account"
   const mask = account.mask ? `****${account.mask}` : ""
+
+  const isDepository = account.type === "depository"
+  const isCredit = account.type === "credit"
 
   return (
     <Card className="border-border/40">
@@ -101,24 +174,44 @@ function AccountCard({ account }: { account: Account }) {
       </CardHeader>
       <CardContent>
         <div className="flex items-baseline justify-between">
-          <span className="text-xl font-bold text-cyan-400">
-            {formatCurrency(account.balance_current ?? 0)}
-          </span>
+          {isDepository ? (
+            <div>
+              <span className="text-xl font-bold text-cyan-400">
+                {formatCurrency(account.balance_available ?? account.balance_current ?? 0)}
+              </span>
+              {account.balance_available != null &&
+                account.balance_current != null &&
+                account.balance_available !== account.balance_current && (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Posted: {formatCurrency(account.balance_current)}
+                  </p>
+                )}
+            </div>
+          ) : (
+            <span className="text-xl font-bold text-cyan-400">
+              {formatCurrency(account.balance_current ?? 0)}
+            </span>
+          )}
           {mask && (
             <span className="text-xs text-muted-foreground">{mask}</span>
           )}
         </div>
-        {account.type === "credit" && (
-          <CreditUtilizationBar account={account} />
+        {isCredit && (
+          <>
+            <CreditUtilizationBar account={account} />
+            <CreditLiabilityInfo accountId={account.id} />
+          </>
         )}
       </CardContent>
     </Card>
   )
 }
 
-export async function AccountCards() {
-  const accounts = await getAccounts()
+interface AccountCardsProps {
+  accounts: Account[]
+}
 
+export function AccountCards({ accounts }: AccountCardsProps) {
   if (accounts.length === 0) {
     return (
       <Card className="border-border/40">

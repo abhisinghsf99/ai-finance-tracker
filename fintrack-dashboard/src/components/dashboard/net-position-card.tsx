@@ -1,25 +1,39 @@
-import { getAccounts } from "@/lib/queries/accounts"
+"use client"
+
+import { useMemo } from "react"
 import { formatCurrency } from "@/lib/plaid-amounts"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Wallet } from "lucide-react"
+import type { Account } from "@/lib/queries/types"
 
-export async function NetPositionCard() {
-  const accounts = await getAccounts()
+interface NetPositionCardProps {
+  accounts: Account[]
+}
 
-  const cash = accounts
-    .filter((a) => a.type === "depository")
-    .reduce((sum, a) => sum + (a.balance_current ?? 0), 0)
+export function NetPositionCard({ accounts }: NetPositionCardProps) {
+  const { cash, credit, loans, netPosition, isPositive } = useMemo(() => {
+    const cashTotal = accounts
+      .filter((a) => a.type === "depository")
+      .reduce((sum, a) => sum + (a.balance_current ?? 0), 0)
 
-  const credit = accounts
-    .filter((a) => a.type === "credit")
-    .reduce((sum, a) => sum + (a.balance_current ?? 0), 0)
+    const creditTotal = accounts
+      .filter((a) => a.type === "credit")
+      .reduce((sum, a) => sum + (a.balance_current ?? 0), 0)
 
-  const loans = accounts
-    .filter((a) => a.type === "loan")
-    .reduce((sum, a) => sum + (a.balance_current ?? 0), 0)
+    const loanTotal = accounts
+      .filter((a) => a.type === "loan")
+      .reduce((sum, a) => sum + (a.balance_current ?? 0), 0)
 
-  const netPosition = cash - credit - loans
-  const isPositive = netPosition >= 0
+    const net = cashTotal - creditTotal - loanTotal
+
+    return {
+      cash: cashTotal,
+      credit: creditTotal,
+      loans: loanTotal,
+      netPosition: net,
+      isPositive: net >= 0,
+    }
+  }, [accounts])
 
   return (
     <Card className="border-border/40">

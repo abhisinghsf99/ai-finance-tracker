@@ -3,11 +3,13 @@
 import { useRouter } from "next/navigation"
 import { LogOut } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { useDashboardStore } from "@/lib/store/dashboard-store"
 
 export function TopNav() {
   const router = useRouter()
 
   async function handleSignOut() {
+    useDashboardStore.getState().clear()
     await fetch("/api/auth", { method: "DELETE" })
     router.push("/login")
   }

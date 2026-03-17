@@ -1,0 +1,28 @@
+# Environment variables and secrets
+.env
+.env.local
+.env.production
+.env*.local
+
+# Recovery files with real financial data
+.recovery.json
+
+# Node.js
+node_modules/
+
+# Next.js build output
+.next/
+
+# macOS
+.DS_Store
+
+# Claude local config
+.claude/
+
+# Personal skill files
+*.skill
+obsidian-note-saver-SKILL.md
+
+# Claude prompts (not useful for viewers)
+claude-code-run1-prompt.md
+claude-code-run2-prompt.md

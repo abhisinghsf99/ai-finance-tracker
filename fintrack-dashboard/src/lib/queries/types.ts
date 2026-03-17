@@ -45,3 +45,31 @@ export interface Transaction {
   created_at: string
   updated_at: string
 }
+
+export interface CreditLiabilityAPR {
+  id: string
+  apr_percentage: number
+  apr_type: 'balance_transfer_apr' | 'cash_apr' | 'purchase_apr' | 'special'
+  balance_subject_to_apr: number | null
+  interest_charge_amount: number | null
+}
+
+export interface CreditLiability {
+  id: string
+  account_id: string
+  is_overdue: boolean | null
+  last_payment_amount: number | null
+  last_payment_date: string | null
+  last_statement_issue_date: string | null
+  last_statement_balance: number | null
+  minimum_payment_amount: number | null
+  next_payment_due_date: string | null
+  updated_at: string
+  aprs: CreditLiabilityAPR[]
+}
+
+export interface CategorySpendingEntry {
+  category: string
+  total: number
+  count: number
+}

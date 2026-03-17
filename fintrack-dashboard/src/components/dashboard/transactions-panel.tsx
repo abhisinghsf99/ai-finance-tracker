@@ -1,15 +1,16 @@
 "use client"
 
 import { useState, useMemo, useEffect } from "react"
-import { ChevronDown } from "lucide-react"
+import { ChevronRight, X } from "lucide-react"
 import { Card } from "@/components/ui/card"
-import {
-  Collapsible,
-  CollapsibleTrigger,
-  CollapsibleContent,
-} from "@/components/ui/collapsible"
-import { Skeleton } from "@/components/ui/skeleton"
 import { Button } from "@/components/ui/button"
+import { Skeleton } from "@/components/ui/skeleton"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import { TransactionRow } from "@/components/dashboard/transaction-row"
 import { TransactionsToolbar } from "@/components/dashboard/transactions-toolbar"
 import { TransactionFilterPopover } from "@/components/dashboard/transaction-filters"
@@ -66,13 +67,15 @@ function getUniqueCategories(
   return Array.from(cats).sort()
 }
 
+const PREVIEW_COUNT = 5
+
 export function TransactionsPanel({
   transactions,
   accounts,
   onLoadMore,
   hasMore = false,
 }: TransactionsPanelProps) {
-  const [isOpen, setIsOpen] = useState(false)
+  const [modalOpen, setModalOpen] = useState(false)
   const [searchInput, setSearchInput] = useState("")
   const [searchTerm, setSearchTerm] = useState("")
   const [filters, setFilters] = useState<TransactionFilters>({})
@@ -87,21 +90,22 @@ export function TransactionsPanel({
     return () => clearTimeout(timer)
   }, [searchInput])
 
-  // Full filtering pipeline
+  // Base filtered (removes pending etc.)
+  const baseTransactions = useMemo(
+    () => applyBaseFilter(transactions),
+    [transactions]
+  )
+
+  // Full filtering pipeline (for modal)
   const filteredTransactions = useMemo(() => {
-    let result = applyBaseFilter(transactions)
+    let result = baseTransactions
     result = searchTransactions(result, searchTerm)
     result = filterTransactions(result, filters)
     result = sortTransactions(result, sortOption)
     return result
-  }, [transactions, searchTerm, filters, sortOption])
+  }, [baseTransactions, searchTerm, filters, sortOption])
 
-  // Total count before search/filter (but after base filter)
-  const totalCount = useMemo(
-    () => applyBaseFilter(transactions).length,
-    [transactions]
-  )
-
+  const totalCount = baseTransactions.length
   const activeFilterCount = getActiveFilterCount(filters)
   const hasActiveFilters = activeFilterCount > 0 || searchTerm.length > 0
   const categories = useMemo(
@@ -109,21 +113,29 @@ export function TransactionsPanel({
     [transactions]
   )
 
-  // Collapsed: show 3 most recent
-  const collapsedTransactions = filteredTransactions.slice(0, 3)
-  const spending3Days = sumSpendingInDays(filteredTransactions, 3)
-
-  // Expanded: show last 14 days
-  const fourteenDaysAgo = daysAgo(14)
-  const expandedTransactions = filteredTransactions.filter(
-    (t) => t.date >= fourteenDaysAgo
+  // Preview: most recent 5
+  const previewTransactions = useMemo(
+    () => sortTransactions(baseTransactions, "date-desc").slice(0, PREVIEW_COUNT),
+    [baseTransactions]
   )
-  const spending14Days = sumSpendingInDays(filteredTransactions, 14)
+  const spending7Days = sumSpendingInDays(baseTransactions, 7)
 
   const handleRemoveFilter = (key: keyof TransactionFilters) => {
     const next = { ...filters }
     delete next[key]
     setFilters(next)
+  }
+
+  // Reset filters when modal closes
+  const handleModalOpenChange = (open: boolean) => {
+    setModalOpen(open)
+    if (!open) {
+      setSearchInput("")
+      setSearchTerm("")
+      setFilters({})
+      setSortOption("date-desc")
+      setFilterPopoverOpen(false)
+    }
   }
 
   // Loading skeleton
@@ -133,7 +145,6 @@ export function TransactionsPanel({
         <div className="p-4">
           <div className="flex items-center justify-between mb-4">
             <Skeleton className="h-6 w-40" />
-            <Skeleton className="h-5 w-5" />
           </div>
           {[1, 2, 3].map((i) => (
             <div key={i} className="flex flex-col gap-1 py-3">
@@ -153,89 +164,101 @@ export function TransactionsPanel({
   }
 
   return (
-    <Card>
-      <Collapsible open={isOpen} onOpenChange={setIsOpen}>
-        {/* Header */}
-        <CollapsibleTrigger className="w-full">
-          <div className="flex items-center justify-between p-4 cursor-pointer hover:bg-accent/50 transition-colors rounded-t-lg">
-            <h3 className="font-bold text-foreground">
+    <>
+      {/* Inline preview card */}
+      <Card>
+        <div className="px-4 pt-4">
+          {previewTransactions.map((txn) => (
+            <TransactionRow key={txn.id} transaction={txn} />
+          ))}
+        </div>
+
+        {/* Footer with spending summary + expand button */}
+        <div className="px-4 py-3 border-t border-border flex items-center justify-between">
+          <span className="text-sm text-muted-foreground">
+            {formatCurrency(spending7Days)} in the last 7 days
+          </span>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="text-sm text-muted-foreground hover:text-foreground gap-1"
+            onClick={() => setModalOpen(true)}
+          >
+            View All ({totalCount})
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+        </div>
+      </Card>
+
+      {/* Full transactions modal */}
+      <Dialog open={modalOpen} onOpenChange={handleModalOpenChange}>
+        <DialogContent
+          className="sm:max-w-3xl max-h-[90vh] flex flex-col"
+          showCloseButton={false}
+        >
+          {/* Header */}
+          <DialogHeader className="flex flex-row items-center justify-between shrink-0">
+            <DialogTitle className="text-lg font-semibold">
               {hasActiveFilters
                 ? `Showing ${filteredTransactions.length} of ${totalCount} transactions`
-                : `Transactions (${filteredTransactions.length})`}
-            </h3>
-            <ChevronDown
-              className={`h-5 w-5 text-muted-foreground transition-transform duration-200 ${
-                isOpen ? "rotate-180" : ""
-              }`}
-            />
-          </div>
-        </CollapsibleTrigger>
+                : `All Transactions (${totalCount})`}
+            </DialogTitle>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              onClick={() => setModalOpen(false)}
+            >
+              <X className="h-4 w-4" />
+              <span className="sr-only">Close</span>
+            </Button>
+          </DialogHeader>
 
-        {/* Collapsed preview */}
-        {!isOpen && (
-          <div className="px-4 pb-2">
-            {collapsedTransactions.map((txn) => (
-              <TransactionRow key={txn.id} transaction={txn} />
-            ))}
-            <div className="px-0 py-3 border-t border-border text-sm text-muted-foreground">
-              {formatCurrency(spending3Days)} in the last 3 days
-            </div>
-          </div>
-        )}
-
-        {/* Expanded content */}
-        <CollapsibleContent>
           {/* Toolbar */}
-          <TransactionsToolbar
-            searchValue={searchInput}
-            onSearchChange={setSearchInput}
-            onFilterClick={() => setFilterPopoverOpen(!filterPopoverOpen)}
-            activeFilterCount={activeFilterCount}
-            sortOption={sortOption}
-            onSortChange={setSortOption}
-          />
+          <div className="shrink-0">
+            <TransactionsToolbar
+              searchValue={searchInput}
+              onSearchChange={setSearchInput}
+              onFilterClick={() => setFilterPopoverOpen(!filterPopoverOpen)}
+              activeFilterCount={activeFilterCount}
+              sortOption={sortOption}
+              onSortChange={setSortOption}
+            />
 
-          {/* Filter popover (triggered externally) */}
-          <TransactionFilterPopover
-            filters={filters}
-            onFiltersChange={setFilters}
-            categories={categories}
-            accounts={accounts}
-            open={filterPopoverOpen}
-            onOpenChange={setFilterPopoverOpen}
-          />
-
-          {/* Filter chips */}
-          {activeFilterCount > 0 && (
-            <FilterChips
+            <TransactionFilterPopover
               filters={filters}
-              onRemove={handleRemoveFilter}
+              onFiltersChange={setFilters}
               categories={categories}
               accounts={accounts}
+              open={filterPopoverOpen}
+              onOpenChange={setFilterPopoverOpen}
             />
-          )}
 
-          {/* Transaction list */}
-          <div className="px-4 max-h-[500px] overflow-y-auto">
-            {expandedTransactions.length === 0 ? (
+            {activeFilterCount > 0 && (
+              <FilterChips
+                filters={filters}
+                onRemove={handleRemoveFilter}
+                categories={categories}
+                accounts={accounts}
+              />
+            )}
+          </div>
+
+          {/* Scrollable transaction list */}
+          <div className="flex-1 overflow-y-auto min-h-0 px-1">
+            {filteredTransactions.length === 0 ? (
               <div className="py-8 text-center text-muted-foreground text-sm">
                 No transactions found
               </div>
             ) : (
-              expandedTransactions.map((txn) => (
+              filteredTransactions.map((txn) => (
                 <TransactionRow key={txn.id} transaction={txn} />
               ))
             )}
           </div>
 
-          {/* Footer */}
-          <div className="px-4 py-3 border-t border-border text-sm text-muted-foreground">
-            {formatCurrency(spending14Days)} in the last 14 days
-          </div>
-
           {/* Load more */}
           {hasMore && (
-            <div className="px-4 pb-4">
+            <div className="shrink-0 pt-2">
               <Button
                 variant="outline"
                 className="w-full"
@@ -245,8 +268,8 @@ export function TransactionsPanel({
               </Button>
             </div>
           )}
-        </CollapsibleContent>
-      </Collapsible>
-    </Card>
+        </DialogContent>
+      </Dialog>
+    </>
   )
 }

@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Add Liabilities — AI Finance Tracker</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #0a0a0a; color: #e0e0e0;
+      display: flex; justify-content: center; align-items: center; min-height: 100vh;
+    }
+    .container { text-align: center; max-width: 520px; padding: 40px; }
+    h1 { font-size: 24px; margin-bottom: 8px; color: #fff; }
+    .subtitle { color: #888; margin-bottom: 32px; }
+    #status {
+      margin-top: 24px; padding: 16px; border-radius: 8px;
+      text-align: left; font-size: 14px; line-height: 1.8;
+    }
+    .loading { background: #1a1a2e; border: 1px solid #3730a3; color: #818cf8; }
+    .success { background: #052e16; border: 1px solid #166534; color: #4ade80; }
+    .error { background: #2a0a0a; border: 1px solid #991b1b; color: #f87171; }
+    .spinner {
+      display: inline-block; width: 16px; height: 16px;
+      border: 2px solid #818cf8; border-top-color: transparent;
+      border-radius: 50%; animation: spin 0.8s linear infinite;
+      vertical-align: middle; margin-right: 8px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    button {
+      margin-top: 16px; padding: 12px 24px; border: none; border-radius: 8px;
+      background: #3730a3; color: #fff; font-size: 14px; cursor: pointer;
+    }
+    button:hover { background: #4338ca; }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>AI Finance Tracker</h1>
+    <p class="subtitle">Add credit card liabilities to your linked accounts</p>
+    <button id="startBtn" onclick="start()">Start</button>
+    <div id="status"></div>
+  </div>
+
+  <script src="https://cdn.plaid.com/link/v2/stable/link-initialize.js"></script>
+  <script>
+    const LOCAL = "http://localhost:8484";
+    const status = document.getElementById("status");
+    const startBtn = document.getElementById("startBtn");
+
+    function show(type, html) {
+      status.className = type;
+      status.innerHTML = html;
+    }
+
+    async function start() {
+      startBtn.disabled = true;
+      show("loading", '<span class="spinner"></span>Getting link tokens...');
+
+      let tokens;
+      try {
+        const res = await fetch(LOCAL + "/api/add-liabilities-token");
+        if (!res.ok) throw new Error("Failed to get tokens");
+        const data = await res.json();
+        tokens = data.tokens.filter(t => t.link_token);
+      } catch (err) {
+        show("error", "Error: " + err.message);
+        startBtn.disabled = false;
+        return;
+      }
+
+      if (tokens.length === 0) {
+        show("error", "No institutions found or all failed to create tokens.");
+        startBtn.disabled = false;
+        return;
+      }
+
+      show("loading", `<span class="spinner"></span>Opening Plaid Link for <strong>${tokens[0].institution}</strong>...<br><br>Please complete the flow in the Plaid window to grant access to liabilities data.`);
+
+      // Process tokens one at a time
+      let completed = 0;
+      processToken(tokens, 0);
+
+      function processToken(tokens, index) {
+        if (index >= tokens.length) {
+          if (completed > 0) {
+            show("success", `<strong>Done!</strong> Liabilities enabled for ${completed} institution(s).<br><br>You can close this tab.`);
+          } else {
+            show("error", "No institutions were updated. You may need to re-link your accounts.");
+          }
+          return;
+        }
+
+        const token = tokens[index];
+        const handler = Plaid.create({
+          token: token.link_token,
+          onSuccess: async (publicToken, metadata) => {
+            show("loading", `<span class="spinner"></span>Syncing liabilities for <strong>${token.institution}</strong>...`);
+
+            // Find the access token for this item
+            try {
+              const res = await fetch(LOCAL + "/api/sync-liabilities", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  item_id: token.item_id,
+                  // The server will look up the access token from Supabase
+                  access_token: null,
+                }),
+              });
+
+              const data = await res.json();
+              if (data.success) {
+                completed++;
+                show("loading", `<strong>${token.institution}</strong>: ${data.synced} liabilities synced!`);
+              }
+            } catch (err) {
+              show("error", `Sync failed for ${token.institution}: ${err.message}`);
+            }
+
+            // Process next institution
+            setTimeout(() => processToken(tokens, index + 1), 500);
+          },
+          onExit: (err) => {
+            if (err) {
+              show("error", `Plaid Link error for ${token.institution}: ${err.error_message || err.display_message || JSON.stringify(err)}`);
+            } else {
+              show("loading", `Skipped ${token.institution}. Moving to next...`);
+            }
+            setTimeout(() => processToken(tokens, index + 1), 500);
+          },
+        });
+
+        handler.open();
+      }
+    }
+  </script>
+</body>
+</html>

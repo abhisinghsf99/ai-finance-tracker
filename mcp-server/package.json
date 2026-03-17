@@ -1,0 +1,17 @@
+{
+  "name": "financial-assistant-mcp-server",
+  "version": "1.0.0",
+  "description": "MCP server for querying financial data in Supabase via Claude",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "start:http": "node server-http.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.1",
+    "@supabase/supabase-js": "^2.49.4",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2"
+  }
+}

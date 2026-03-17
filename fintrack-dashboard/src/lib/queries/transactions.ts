@@ -39,10 +39,14 @@ export async function getMonthlySpending(
   yearMonth: string
 ): Promise<{ total: number; count: number }> {
   const supabase = createServerSupabase()
+  const startDate = `${yearMonth}-01`
+  const [year, month] = yearMonth.split("-").map(Number)
+  const nextMonth = month === 12 ? `${year + 1}-01-01` : `${year}-${String(month + 1).padStart(2, "0")}-01`
   const { data, error } = await supabase
     .from("transactions")
     .select("amount")
-    .like("date", `${yearMonth}%`)
+    .gte("date", startDate)
+    .lt("date", nextMonth)
 
   if (error)
     throw new Error(`Failed to fetch monthly spending: ${error.message}`)
@@ -92,10 +96,14 @@ export async function getCategorySpending(
   yearMonth: string
 ): Promise<CategorySpendingEntry[]> {
   const supabase = createServerSupabase()
+  const startDate = `${yearMonth}-01`
+  const [year, month] = yearMonth.split("-").map(Number)
+  const nextMonth = month === 12 ? `${year + 1}-01-01` : `${year}-${String(month + 1).padStart(2, "0")}-01`
   const { data, error } = await supabase
     .from("transactions")
     .select("amount, category_primary")
-    .like("date", `${yearMonth}%`)
+    .gte("date", startDate)
+    .lt("date", nextMonth)
 
   if (error)
     throw new Error(`Failed to fetch category spending: ${error.message}`)
@@ -127,10 +135,14 @@ export async function getTransactionsByCategory(
 ): Promise<Transaction[]> {
   const supabase = createServerSupabase()
 
+  const startDate = `${yearMonth}-01`
+  const [yr, mo] = yearMonth.split("-").map(Number)
+  const nextMonth = mo === 12 ? `${yr + 1}-01-01` : `${yr}-${String(mo + 1).padStart(2, "0")}-01`
   let query = supabase
     .from("transactions")
     .select("*")
-    .like("date", `${yearMonth}%`)
+    .gte("date", startDate)
+    .lt("date", nextMonth)
     .gt("amount", 0)
     .order("date", { ascending: false })
 

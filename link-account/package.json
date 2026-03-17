@@ -1,0 +1,16 @@
+{
+  "name": "plaid-link-account",
+  "version": "1.0.0",
+  "description": "One-time Plaid Link setup to connect a bank account",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.49.4",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "plaid": "^28.0.0"
+  }
+}

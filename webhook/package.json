@@ -1,0 +1,17 @@
+{
+  "name": "plaid-webhook-receiver",
+  "version": "1.0.0",
+  "description": "Webhook receiver for Plaid transaction sync events",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.49.4",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "jose": "^5.9.6",
+    "plaid": "^28.0.0"
+  }
+}

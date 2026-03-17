@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI Finance Tracker — Link Account</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #0a0a0a;
+      color: #e0e0e0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+    }
+    .container {
+      text-align: center;
+      max-width: 480px;
+      padding: 40px;
+    }
+    h1 {
+      font-size: 24px;
+      margin-bottom: 8px;
+      color: #fff;
+    }
+    .subtitle {
+      color: #888;
+      margin-bottom: 32px;
+    }
+    button {
+      background: #2563eb;
+      color: #fff;
+      border: none;
+      padding: 14px 32px;
+      font-size: 16px;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    button:hover { background: #1d4ed8; }
+    button:disabled {
+      background: #333;
+      cursor: not-allowed;
+    }
+    #status {
+      margin-top: 24px;
+      padding: 16px;
+      border-radius: 8px;
+      display: none;
+      text-align: left;
+      font-size: 14px;
+      line-height: 1.6;
+    }
+    #status.success {
+      display: block;
+      background: #052e16;
+      border: 1px solid #166534;
+      color: #4ade80;
+    }
+    #status.error {
+      display: block;
+      background: #2a0a0a;
+      border: 1px solid #991b1b;
+      color: #f87171;
+    }
+    #status.loading {
+      display: block;
+      background: #1a1a2e;
+      border: 1px solid #3730a3;
+      color: #818cf8;
+    }
+    .spinner {
+      display: inline-block;
+      width: 16px;
+      height: 16px;
+      border: 2px solid #818cf8;
+      border-top-color: transparent;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      vertical-align: middle;
+      margin-right: 8px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>AI Finance Tracker</h1>
+    <p class="subtitle">Connect your bank account via Plaid</p>
+    <button id="link-btn" disabled>Loading...</button>
+    <div id="status"></div>
+  </div>
+
+  <script src="https://cdn.plaid.com/link/v2/stable/link-initialize.js"></script>
+  <script>
+    const btn = document.getElementById("link-btn");
+    const status = document.getElementById("status");
+    const isOAuthCallback = window.location.pathname === "/oauth-callback";
+
+    function showStatus(type, html) {
+      status.className = type;
+      status.innerHTML = html;
+    }
+
+    async function init() {
+      let linkToken;
+
+      if (isOAuthCallback) {
+        // Returning from OAuth — reuse stored link_token
+        linkToken = localStorage.getItem("link_token");
+        if (!linkToken) {
+          showStatus("error", "OAuth callback but no stored link_token. Please start over.");
+          btn.textContent = "Reload";
+          btn.disabled = false;
+          btn.onclick = () => { window.location.href = "/"; };
+          return;
+        }
+      } else {
+        // Fresh start — fetch a new link token
+        try {
+          const res = await fetch("/api/link-token");
+          const data = await res.json();
+          if (!res.ok) throw new Error(JSON.stringify(data.error));
+          linkToken = data.link_token;
+          localStorage.setItem("link_token", linkToken);
+        } catch (err) {
+          showStatus("error", `Failed to get link token: ${err.message}`);
+          btn.textContent = "Retry";
+          btn.disabled = false;
+          btn.onclick = () => window.location.reload();
+          return;
+        }
+      }
+
+      // Initialize Plaid Link
+      const config = {
+        token: linkToken,
+        onSuccess: async (publicToken, metadata) => {
+          showStatus("loading", '<span class="spinner"></span>Connecting account and syncing transactions...');
+          btn.disabled = true;
+
+          try {
+            const res = await fetch("/api/exchange", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ public_token: publicToken, metadata }),
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(JSON.stringify(data.error));
+
+            localStorage.removeItem("link_token");
+            showStatus("success",
+              `<strong>Account linked successfully!</strong><br><br>` +
+              `Institution: ${data.institution}<br>` +
+              `Accounts: ${data.accounts}<br>` +
+              `Transactions added: ${data.transactions.added}<br><br>` +
+              `<strong>Totals in database:</strong><br>` +
+              `Institutions: ${data.totals.institutions}<br>` +
+              `Accounts: ${data.totals.accounts}<br>` +
+              `Transactions: ${data.totals.transactions}<br><br>` +
+              `<strong>ALL SYSTEMS GO!</strong> Server shutting down.`
+            );
+            btn.textContent = "Done";
+          } catch (err) {
+            showStatus("error", `Exchange failed: ${err.message}`);
+            btn.textContent = "Retry";
+            btn.disabled = false;
+            btn.onclick = () => window.location.reload();
+          }
+        },
+        onExit: (err, metadata) => {
+          if (err) {
+            showStatus("error", `Plaid Link error: ${err.error_message || err.display_message || JSON.stringify(err)}`);
+          } else {
+            showStatus("error", "Plaid Link closed without connecting an account.");
+          }
+          btn.textContent = "Try Again";
+          btn.disabled = false;
+          btn.onclick = () => window.location.reload();
+        },
+      };
+
+      // For OAuth callback, pass the current URL so Plaid can resume
+      if (isOAuthCallback) {
+        config.receivedRedirectUri = window.location.href;
+      }
+
+      const handler = Plaid.create(config);
+
+      if (isOAuthCallback) {
+        // Auto-open Link for OAuth return
+        handler.open();
+      } else {
+        btn.textContent = "Connect Bank Account";
+        btn.disabled = false;
+        btn.onclick = () => handler.open();
+      }
+    }
+
+    init();
+  </script>
+</body>
+</html>
